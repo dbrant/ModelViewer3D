@@ -60,6 +60,11 @@ public final class Util {
         }
     }
 
+    public static int readIntLe(byte[] bytes, int offset) {
+        return (bytes[offset] & 0xff) | (bytes[offset + 1] & 0xff) << 8
+                | (bytes[offset + 2] & 0xff) << 16 | (bytes[offset + 3] & 0xff) << 24;
+    }
+
     public static void calculateNormal(float x1, float y1, float z1,
                                  float x2, float y2, float z2,
                                  float x3, float y3, float z3,
@@ -95,8 +100,7 @@ public final class Util {
     }
 
     @NonNull
-    private static String readTextFileFromRawRes(@RawRes int resourceId)
-    {
+    private static String readTextFileFromRawRes(@RawRes int resourceId) {
         InputStream inputStream = ModelViewerApplication.getInstance().getResources()
                 .openRawResource(resourceId);
         try {

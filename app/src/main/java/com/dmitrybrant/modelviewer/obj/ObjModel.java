@@ -16,6 +16,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /*
+ *
+ * Info on the Wavefront OBJ format: https://en.wikipedia.org/wiki/Wavefront_.obj_file
+ * This is NOT a complete implementation of the OBJ format. It does not support textures,
+ * only supports faces of 3 or 4 vertices, and combines all sub-objects into a single model.
+ *
  * Copyright 2017 Dmitry Brant. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -223,7 +228,8 @@ public class ObjModel extends IndexedModel {
     }
 
     // This is a method that takes a string and parses any integers out of it (in place, without
-    // using any additional string splitting, regexes, or int parsing).
+    // using any additional string splitting, regexes, or int parsing), which provides a pretty
+    // significant speed gain.
     // - The first three output integers are pre-initialized to -1.
     // - The integers in the string are expected to be delimited by a single non-numeric character.
     //   If a non-numeric character follows another non-numeric character, then an integer value

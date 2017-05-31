@@ -19,7 +19,13 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.dmitrybrant.modelviewer.util.Util.readIntLe;
+
 /*
+ *
+ * Info on the PLY format: https://en.wikipedia.org/wiki/PLY_(file_format)
+ * Please see limitations in inline comments.
+ *
  * Copyright 2017 Dmitry Brant. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -69,7 +75,6 @@ public class PlyModel extends IndexedModel {
 
     private void readText(@NonNull BufferedInputStream stream) throws IOException {
         List<Float> vertices = new ArrayList<>();
-        List<Integer> indices = new ArrayList<>();
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(stream), INPUT_BUFFER_SIZE);
         String line;
@@ -165,9 +170,9 @@ public class PlyModel extends IndexedModel {
 
         for (int i = 0; i < vertexCount; i++) {
             stream.read(tempBytes, 0, BYTES_PER_FLOAT * 3);
-            x = Float.intBitsToFloat(getIntLe(tempBytes, 0));
-            y = Float.intBitsToFloat(getIntLe(tempBytes, BYTES_PER_FLOAT));
-            z = Float.intBitsToFloat(getIntLe(tempBytes, BYTES_PER_FLOAT * 2));
+            x = Float.intBitsToFloat(readIntLe(tempBytes, 0));
+            y = Float.intBitsToFloat(readIntLe(tempBytes, BYTES_PER_FLOAT));
+            z = Float.intBitsToFloat(readIntLe(tempBytes, BYTES_PER_FLOAT * 2));
             vertices.add(x);
             vertices.add(y);
             vertices.add(z);
@@ -209,10 +214,5 @@ public class PlyModel extends IndexedModel {
         GLES20.glDrawArrays(GLES20.GL_POINTS, 0, vertexCount);
 
         GLES20.glDisableVertexAttribArray(positionHandle);
-    }
-
-    private int getIntLe(byte[] bytes, int offset) {
-        return (bytes[offset] & 0xff) | (bytes[offset + 1] & 0xff) << 8
-                | (bytes[offset + 2] & 0xff) << 16 | (bytes[offset + 3] & 0xff) << 24;
     }
 }

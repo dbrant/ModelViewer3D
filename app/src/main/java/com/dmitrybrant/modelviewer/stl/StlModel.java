@@ -15,7 +15,11 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.dmitrybrant.modelviewer.util.Util.readIntLe;
+
 /*
+ * Info on the STL format: https://en.wikipedia.org/wiki/STL_(file_format)
+ *
  * Copyright 2017 Dmitry Brant. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -141,7 +145,7 @@ public class StlModel extends ArrayModel {
         byte[] tempBytes = new byte[chunkSize];
         inputStream.skip(HEADER_SIZE);
         inputStream.read(tempBytes, 0, BYTES_PER_FLOAT);
-        int vectorSize = getIntLe(tempBytes, 0);
+        int vectorSize = readIntLe(tempBytes, 0);
 
         vertexCount = vectorSize * 3;
 
@@ -162,9 +166,9 @@ public class StlModel extends ArrayModel {
         for (int i = 0; i < vectorSize; i++) {
             inputStream.read(tempBytes, 0, tempBytes.length);
 
-            x = Float.intBitsToFloat(getIntLe(tempBytes, 0));
-            y = Float.intBitsToFloat(getIntLe(tempBytes, 4));
-            z = Float.intBitsToFloat(getIntLe(tempBytes, 8));
+            x = Float.intBitsToFloat(readIntLe(tempBytes, 0));
+            y = Float.intBitsToFloat(readIntLe(tempBytes, 4));
+            z = Float.intBitsToFloat(readIntLe(tempBytes, 8));
             normalArray[normalPtr++] = x;
             normalArray[normalPtr++] = y;
             normalArray[normalPtr++] = z;
@@ -180,9 +184,9 @@ public class StlModel extends ArrayModel {
                 }
             }
 
-            x = Float.intBitsToFloat(getIntLe(tempBytes, 12));
-            y = Float.intBitsToFloat(getIntLe(tempBytes, 16));
-            z = Float.intBitsToFloat(getIntLe(tempBytes, 20));
+            x = Float.intBitsToFloat(readIntLe(tempBytes, 12));
+            y = Float.intBitsToFloat(readIntLe(tempBytes, 16));
+            z = Float.intBitsToFloat(readIntLe(tempBytes, 20));
             adjustMaxMin(x, y, z);
             centerMassX += x;
             centerMassY += y;
@@ -191,9 +195,9 @@ public class StlModel extends ArrayModel {
             vertexArray[vertexPtr++] = y;
             vertexArray[vertexPtr++] = z;
 
-            x = Float.intBitsToFloat(getIntLe(tempBytes, 24));
-            y = Float.intBitsToFloat(getIntLe(tempBytes, 28));
-            z = Float.intBitsToFloat(getIntLe(tempBytes, 32));
+            x = Float.intBitsToFloat(readIntLe(tempBytes, 24));
+            y = Float.intBitsToFloat(readIntLe(tempBytes, 28));
+            z = Float.intBitsToFloat(readIntLe(tempBytes, 32));
             adjustMaxMin(x, y, z);
             centerMassX += x;
             centerMassY += y;
@@ -202,9 +206,9 @@ public class StlModel extends ArrayModel {
             vertexArray[vertexPtr++] = y;
             vertexArray[vertexPtr++] = z;
 
-            x = Float.intBitsToFloat(getIntLe(tempBytes, 36));
-            y = Float.intBitsToFloat(getIntLe(tempBytes, 40));
-            z = Float.intBitsToFloat(getIntLe(tempBytes, 44));
+            x = Float.intBitsToFloat(readIntLe(tempBytes, 36));
+            y = Float.intBitsToFloat(readIntLe(tempBytes, 40));
+            z = Float.intBitsToFloat(readIntLe(tempBytes, 44));
             adjustMaxMin(x, y, z);
             centerMassX += x;
             centerMassY += y;
@@ -248,10 +252,5 @@ public class StlModel extends ArrayModel {
         normalBuffer = vbb.asFloatBuffer();
         normalBuffer.put(normalArray);
         normalBuffer.position(0);
-    }
-
-    private int getIntLe(byte[] bytes, int offset) {
-        return (bytes[offset] & 0xff) | (bytes[offset + 1] & 0xff) << 8
-                | (bytes[offset + 2] & 0xff) << 16 | (bytes[offset + 3] & 0xff) << 24;
     }
 }
