@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">ModelViewer</string>
+    <string name="copyright">Copyright 2017 Dmitry Brant.</string>
+    <string name="read_permission_failed">Please allow read permission to open model files.</string>
+    <string name="open_model">Open model…</string>
+    <string name="open_model_success">Model loaded successfully.</string>
+    <string name="open_model_error">Failed to load model.</string>
+    <string name="view_vr">View in VR mode</string>
+    <string name="view_vr_not_loaded">Please load a model first.</string>
+</resources>
