@@ -192,23 +192,7 @@ public class MainActivity extends AppCompatActivity {
                 ContentResolver cr = getApplicationContext().getContentResolver();
                 stream = cr.openInputStream(uri);
                 if (stream != null) {
-                    String fileName = null;
-                    if ("content".equals(uri.getScheme())) {
-                        String[] projection = {MediaStore.MediaColumns.DISPLAY_NAME};
-                        Cursor metaCursor = ContentResolverCompat.query(cr, uri, projection, null, null, null, null);
-                        if (metaCursor != null) {
-                            try {
-                                if (metaCursor.moveToFirst()) {
-                                    fileName = metaCursor.getString(0);
-                                }
-                            } finally {
-                                metaCursor.close();
-                            }
-                        }
-                    } else {
-                        fileName = uri.getLastPathSegment();
-                    }
-
+                    String fileName = getFileName(cr, uri);
                     Model model;
                     if (!TextUtils.isEmpty(fileName)) {
                         if (fileName.toLowerCase().endsWith(".stl")) {
@@ -253,6 +237,24 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(getApplicationContext(), R.string.open_model_error, Toast.LENGTH_SHORT).show();
                 progressBar.setVisibility(View.GONE);
             }
+        }
+
+        @Nullable
+        private String getFileName(@NonNull ContentResolver cr, @NonNull Uri uri) {
+            if ("content".equals(uri.getScheme())) {
+                String[] projection = {MediaStore.MediaColumns.DISPLAY_NAME};
+                Cursor metaCursor = ContentResolverCompat.query(cr, uri, projection, null, null, null, null);
+                if (metaCursor != null) {
+                    try {
+                        if (metaCursor.moveToFirst()) {
+                            return metaCursor.getString(0);
+                        }
+                    } finally {
+                        metaCursor.close();
+                    }
+                }
+            }
+            return uri.getLastPathSegment();
         }
     }
 }
