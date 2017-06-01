@@ -6,4 +6,7 @@
         android:icon="@drawable/ic_folder_open_white_24dp"
         android:title="@string/open_model"
         app:showAsAction="always" />
+    <item android:id="@+id/menu_about"
+        android:title="@string/about"
+        app:showAsAction="never" />
 </menu>
