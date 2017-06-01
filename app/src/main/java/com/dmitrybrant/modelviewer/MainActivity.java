@@ -65,6 +65,13 @@ public class MainActivity extends AppCompatActivity {
         progressBar = (ProgressBar) findViewById(R.id.model_progress_bar);
         progressBar.setVisibility(View.GONE);
 
+        findViewById(R.id.vr_fab).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startVrActivity();
+            }
+        });
+
         if (getIntent().getData() != null && savedInstanceState == null) {
             beginLoadModel(getIntent().getData());
         }
@@ -109,13 +116,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-            case R.id.menu_open_gvr:
-                if (app.getCurrentModel() == null) {
-                    Toast.makeText(this, R.string.view_vr_not_loaded, Toast.LENGTH_SHORT).show();
-                } else {
-                    startActivity(new Intent(this, ModelGvrActivity.class));
-                }
-                return true;
             case R.id.menu_open_model:
                 checkReadPermissionThenOpen();
                 return true;
@@ -255,6 +255,14 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             return uri.getLastPathSegment();
+        }
+    }
+
+    private void startVrActivity() {
+        if (app.getCurrentModel() == null) {
+            Toast.makeText(this, R.string.view_vr_not_loaded, Toast.LENGTH_SHORT).show();
+        } else {
+            startActivity(new Intent(this, ModelGvrActivity.class));
         }
     }
 }

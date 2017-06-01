@@ -1,12 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    >
-    <item android:id="@+id/menu_open_gvr"
-        android:icon="@drawable/ic_google_cardboard"
-        android:title="@string/view_vr"
-        app:showAsAction="always" />
+    xmlns:app="http://schemas.android.com/apk/res-auto">
     <item android:id="@+id/menu_open_model"
         android:icon="@drawable/ic_folder_open_white_24dp"
         android:title="@string/open_model"
