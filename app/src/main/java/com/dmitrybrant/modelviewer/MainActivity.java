@@ -30,6 +30,7 @@ import com.dmitrybrant.modelviewer.ply.PlyModel;
 import com.dmitrybrant.modelviewer.stl.StlModel;
 import com.dmitrybrant.modelviewer.util.Util;
 
+import java.io.IOException;
 import java.io.InputStream;
 
 /*
@@ -50,6 +51,10 @@ import java.io.InputStream;
 public class MainActivity extends AppCompatActivity {
     private static final int READ_PERMISSION_REQUEST = 100;
     private static final int OPEN_DOCUMENT_REQUEST = 101;
+
+    private static final String[] SAMPLE_MODELS
+            = new String[] { "bunny.stl", "dragon.stl", "lucy.stl" };
+    private static int sampleModelIndex;
 
     private ModelViewerApplication app;
     @Nullable private ModelSurfaceView modelView;
@@ -114,6 +119,9 @@ public class MainActivity extends AppCompatActivity {
         switch (item.getItemId()) {
             case R.id.menu_open_model:
                 checkReadPermissionThenOpen();
+                return true;
+            case R.id.menu_load_sample:
+                loadSampleModel();
                 return true;
             case R.id.menu_about:
                 showAboutDialog();
@@ -228,10 +236,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             if (model != null) {
-                createNewModelView(model);
-                Toast.makeText(getApplicationContext(), R.string.open_model_success, Toast.LENGTH_SHORT).show();
-                setTitle(model.getTitle());
-                progressBar.setVisibility(View.GONE);
+                setCurrentModel(model);
             } else {
                 Toast.makeText(getApplicationContext(), R.string.open_model_error, Toast.LENGTH_SHORT).show();
                 progressBar.setVisibility(View.GONE);
@@ -257,11 +262,29 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void setCurrentModel(@NonNull Model model) {
+        createNewModelView(model);
+        Toast.makeText(getApplicationContext(), R.string.open_model_success, Toast.LENGTH_SHORT).show();
+        setTitle(model.getTitle());
+        progressBar.setVisibility(View.GONE);
+    }
+
     private void startVrActivity() {
         if (app.getCurrentModel() == null) {
             Toast.makeText(this, R.string.view_vr_not_loaded, Toast.LENGTH_SHORT).show();
         } else {
             startActivity(new Intent(this, ModelGvrActivity.class));
+        }
+    }
+
+    private void loadSampleModel() {
+        try {
+            InputStream stream = getApplicationContext().getAssets()
+                    .open(SAMPLE_MODELS[sampleModelIndex++ % SAMPLE_MODELS.length]);
+            setCurrentModel(new StlModel(stream));
+            stream.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
