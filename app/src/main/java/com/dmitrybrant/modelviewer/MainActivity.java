@@ -30,8 +30,13 @@ import com.dmitrybrant.modelviewer.ply.PlyModel;
 import com.dmitrybrant.modelviewer.stl.StlModel;
 import com.dmitrybrant.modelviewer.util.Util;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 /*
  * Copyright 2017 Dmitry Brant. All rights reserved.
@@ -194,9 +199,20 @@ public class MainActivity extends AppCompatActivity {
             try {
                 Uri uri = file[0];
                 ContentResolver cr = getApplicationContext().getContentResolver();
-                stream = cr.openInputStream(uri);
+                String fileName = getFileName(cr, uri);
+
+                if ("http".equals(uri.getScheme()) || "https".equals(uri.getScheme())) {
+                    OkHttpClient client = new OkHttpClient();
+                    Request request = new Request.Builder().url(uri.toString()).build();
+                    Response response = client.newCall(request).execute();
+
+                    // TODO: figure out how to NOT need to read the whole file at once.
+                    stream = new ByteArrayInputStream(response.body().bytes());
+                } else {
+                    stream = cr.openInputStream(uri);
+                }
+
                 if (stream != null) {
-                    String fileName = getFileName(cr, uri);
                     Model model;
                     if (!TextUtils.isEmpty(fileName)) {
                         if (fileName.toLowerCase().endsWith(".stl")) {

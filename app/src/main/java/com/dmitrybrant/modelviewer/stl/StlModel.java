@@ -40,7 +40,7 @@ public class StlModel extends ArrayModel {
     public StlModel(@NonNull InputStream inputStream) throws IOException {
         super();
         BufferedInputStream stream = new BufferedInputStream(inputStream, INPUT_BUFFER_SIZE);
-        stream.mark(1);
+        stream.mark(HEADER_SIZE);
         boolean isText = isTextFormat(stream);
         stream.reset();
         if (isText) {

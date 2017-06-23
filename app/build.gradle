@@ -30,6 +30,7 @@ dependencies {
     })
     compile 'com.android.support:appcompat-v7:25.3.1'
     compile "com.android.support:design:25.3.1"
+    compile 'com.squareup.okhttp3:okhttp:3.8.1'
     compile 'com.google.vr:sdk-base:1.30.0'
     testCompile 'junit:junit:4.12'
 }
