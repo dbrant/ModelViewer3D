@@ -1,3 +1,5 @@
+precision mediump float;
+
 uniform vec3 u_LightPos;
 uniform vec3 u_ambientColor;
 uniform vec3 u_diffuseColor;

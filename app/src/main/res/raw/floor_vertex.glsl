@@ -1,3 +1,5 @@
+precision mediump float;
+
 uniform mat4 u_Model;
 uniform mat4 u_MVP;
 attribute vec4 a_Position;
