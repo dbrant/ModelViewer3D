@@ -169,12 +169,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void beginOpenModel() {
-        // TODO: support file picking for API <20
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            intent.setType("*/*");
-            startActivityForResult(intent, OPEN_DOCUMENT_REQUEST);
-        }
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.setType("*/*");
+        startActivityForResult(intent, OPEN_DOCUMENT_REQUEST);
     }
 
     private void beginLoadModel(@NonNull Uri uri) {
