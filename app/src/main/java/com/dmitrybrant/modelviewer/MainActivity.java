@@ -72,8 +72,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         app = ModelViewerApplication.getInstance();
 
-        containerView = (ViewGroup) findViewById(R.id.container_view);
-        progressBar = (ProgressBar) findViewById(R.id.model_progress_bar);
+        containerView = findViewById(R.id.container_view);
+        progressBar = findViewById(R.id.model_progress_bar);
         progressBar.setVisibility(View.GONE);
 
         findViewById(R.id.vr_fab).setOnClickListener(new View.OnClickListener() {

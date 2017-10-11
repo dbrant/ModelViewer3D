@@ -82,7 +82,7 @@ public class ModelGvrActivity extends GvrActivity implements GvrView.StereoRende
     public void initializeGvrView() {
         setContentView(R.layout.activity_gvr);
 
-        GvrView gvrView = (GvrView) findViewById(R.id.gvr_view);
+        GvrView gvrView = findViewById(R.id.gvr_view);
         gvrView.setEGLConfigChooser(8, 8, 8, 8, 16, 8);
 
         gvrView.setRenderer(this);
