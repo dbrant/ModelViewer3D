@@ -76,12 +76,7 @@ public class MainActivity extends AppCompatActivity {
         progressBar = findViewById(R.id.model_progress_bar);
         progressBar.setVisibility(View.GONE);
 
-        findViewById(R.id.vr_fab).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startVrActivity();
-            }
-        });
+        findViewById(R.id.vr_fab).setOnClickListener((View v) -> startVrActivity());
 
         if (getIntent().getData() != null && savedInstanceState == null) {
             beginLoadModel(getIntent().getData());
@@ -155,7 +150,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
-        if (requestCode == OPEN_DOCUMENT_REQUEST && resultCode == RESULT_OK) {
+        if (requestCode == OPEN_DOCUMENT_REQUEST && resultCode == RESULT_OK && resultData.getData() != null) {
             Uri uri = resultData.getData();
             grantUriPermission(getPackageName(), uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
             beginLoadModel(uri);
