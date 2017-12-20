@@ -2,7 +2,7 @@ apply plugin: 'com.android.application'
 
 android {
     compileSdkVersion 26
-    buildToolsVersion "26.0.2"
+    buildToolsVersion "27.0.1"
     defaultConfig {
         applicationId "com.dmitrybrant.modelviewer"
         minSdkVersion 19
@@ -20,6 +20,10 @@ android {
     }
     lintOptions {
         abortOnError false
+    }
+    compileOptions {
+        targetCompatibility 1.8
+        sourceCompatibility 1.8
     }
 }
 

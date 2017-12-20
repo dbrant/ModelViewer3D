@@ -92,12 +92,7 @@ public class ModelGvrActivity extends GvrActivity implements GvrView.StereoRende
         // Daydream controller input for basic interactions using the existing Cardboard trigger API.
         gvrView.enableCardboardTriggerEmulation();
 
-        gvrView.setOnCloseButtonListener(new Runnable() {
-            @Override
-            public void run() {
-                finish();
-            }
-        });
+        gvrView.setOnCloseButtonListener(this::finish);
 
         if (gvrView.setAsyncReprojectionEnabled(true)) {
             // Async reprojection decouples the app framerate from the display framerate,
