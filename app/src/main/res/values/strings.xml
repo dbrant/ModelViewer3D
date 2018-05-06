@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">3D Model Viewer</string>
     <string name="about">About…</string>
-    <string name="about_text">This app allows you to view 3D models that you have downloaded, or open 3D models directly from your browser. Supports STL, OBJ, and PLY models. Tap the VR button at the bottom to view the model in your VR headset!\n\nCopyright © 2017 Dmitry Brant.</string>
+    <string name="about_text">This app allows you to view 3D models that you have downloaded, or open 3D models directly from your browser. Supports STL, OBJ, and PLY models. Tap the VR button at the bottom to view the model in your VR headset!\n\nCopyright © 2017–2018 Dmitry Brant.</string>
     <string name="load_sample">Load sample</string>
     <string name="read_permission_failed">Please allow read permission to open model files.</string>
     <string name="open_model">Open model…</string>
