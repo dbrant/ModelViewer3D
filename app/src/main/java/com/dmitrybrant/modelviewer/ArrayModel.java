@@ -46,6 +46,10 @@ public class ArrayModel extends Model {
         super.init(boundSize);
     }
 
+    public int getVertexCount() {
+        return vertexCount;
+    }
+
     @Override
     public void draw(float[] viewMatrix, float[] projectionMatrix, @NonNull Light light) {
         if (vertexBuffer == null || normalBuffer == null) {
