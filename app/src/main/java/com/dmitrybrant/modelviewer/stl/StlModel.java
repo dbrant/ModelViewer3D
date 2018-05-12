@@ -14,13 +14,14 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import static com.dmitrybrant.modelviewer.util.Util.readIntLe;
 
 /*
  * Info on the STL format: https://en.wikipedia.org/wiki/STL_(file_format)
  *
- * Copyright 2017 Dmitry Brant. All rights reserved.
+ * Copyright 2017-2018 Dmitry Brant. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,12 +36,13 @@ import static com.dmitrybrant.modelviewer.util.Util.readIntLe;
  * limitations under the License.
  */
 public class StlModel extends ArrayModel {
-    private static int HEADER_SIZE = 80;
+    private static final int HEADER_SIZE = 80;
+    private static final int ASCII_TEST_SIZE = 256;
 
     public StlModel(@NonNull InputStream inputStream) throws IOException {
         super();
         BufferedInputStream stream = new BufferedInputStream(inputStream, INPUT_BUFFER_SIZE);
-        stream.mark(HEADER_SIZE);
+        stream.mark(ASCII_TEST_SIZE);
         boolean isText = isTextFormat(stream);
         stream.reset();
         if (isText) {
@@ -64,10 +66,10 @@ public class StlModel extends ArrayModel {
     }
 
     private boolean isTextFormat(@NonNull InputStream stream) throws IOException {
-        byte[] testBytes = new byte[HEADER_SIZE];
-        stream.read(testBytes, 0, testBytes.length);
-        String string = new String(testBytes);
-        return string.contains("solid") && !string.contains("\0");
+        byte[] testBytes = new byte[ASCII_TEST_SIZE];
+        int bytesRead = stream.read(testBytes, 0, testBytes.length);
+        String string = new String(testBytes, 0, bytesRead);
+        return string.contains("solid") && string.contains("facet") && string.contains("vertex");
     }
 
     private void readText(@NonNull InputStream stream) throws IOException {
@@ -77,14 +79,16 @@ public class StlModel extends ArrayModel {
         String line;
         String[] lineArr;
 
+        Pattern pattern = Pattern.compile("\\s+");
+
         double centerMassX = 0.0;
         double centerMassY = 0.0;
         double centerMassZ = 0.0;
         while ((line = reader.readLine()) != null) {
             line = line.trim();
             if (line.startsWith("facet")) {
-                line = line.replaceFirst("facet normal ", "");
-                lineArr = line.split(" ");
+                line = line.replaceFirst("facet normal ", "").trim();
+                lineArr = pattern.split(line, 0);
                 float x = Float.parseFloat(lineArr[0]);
                 float y = Float.parseFloat(lineArr[1]);
                 float z = Float.parseFloat(lineArr[2]);
@@ -98,8 +102,8 @@ public class StlModel extends ArrayModel {
                 normals.add(y);
                 normals.add(z);
             } else if (line.startsWith("vertex")) {
-                line = line.replaceFirst("vertex ", "");
-                lineArr = line.split(" ");
+                line = line.replaceFirst("vertex ", "").trim();
+                lineArr = pattern.split(line, 0);
                 float x = Float.parseFloat(lineArr[0]);
                 float y = Float.parseFloat(lineArr[1]);
                 float z = Float.parseFloat(lineArr[2]);
