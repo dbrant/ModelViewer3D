@@ -3,7 +3,6 @@ package com.dmitrybrant.modelviewer.gvr;
 import android.content.Context;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
-import android.os.Vibrator;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.util.Log;
@@ -70,13 +69,11 @@ public class ModelGvrActivity extends GvrActivity implements GvrView.StereoRende
     private float[] headRotation = new float[4];
     private float[] headEulerAngles = new float[3];
 
-    private Vibrator vibrator;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         initializeGvrView();
-        vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
     }
 
     public void initializeGvrView() {
@@ -204,7 +201,6 @@ public class ModelGvrActivity extends GvrActivity implements GvrView.StereoRende
         Log.i(TAG, "onCardboardTrigger");
         // TODO: use for something
 
-        vibrator.vibrate(50);
     }
 
     // TODO: use for something.
