@@ -1,6 +1,6 @@
 package com.dmitrybrant.modelviewer.stl;
 
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
 
 import com.dmitrybrant.modelviewer.ArrayModel;
 import com.dmitrybrant.modelviewer.util.Util;

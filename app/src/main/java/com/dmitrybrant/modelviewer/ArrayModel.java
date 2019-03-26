@@ -2,8 +2,8 @@ package com.dmitrybrant.modelviewer;
 
 import android.opengl.GLES20;
 import android.opengl.Matrix;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.dmitrybrant.modelviewer.util.Util;
 

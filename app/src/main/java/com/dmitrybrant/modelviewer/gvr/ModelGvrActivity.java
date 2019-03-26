@@ -1,10 +1,9 @@
 package com.dmitrybrant.modelviewer.gvr;
 
-import android.content.Context;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
 import android.os.Bundle;
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 import android.util.Log;
 
 import com.dmitrybrant.modelviewer.Light;

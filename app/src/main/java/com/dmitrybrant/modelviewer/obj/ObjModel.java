@@ -1,6 +1,6 @@
 package com.dmitrybrant.modelviewer.obj;
 
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
 
 import com.dmitrybrant.modelviewer.IndexedModel;
 import com.dmitrybrant.modelviewer.util.Util;

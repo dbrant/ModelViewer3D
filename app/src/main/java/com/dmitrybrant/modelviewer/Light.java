@@ -1,7 +1,7 @@
 package com.dmitrybrant.modelviewer;
 
 import android.opengl.Matrix;
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
 
 /*
  * Copyright 2017 Dmitry Brant. All rights reserved.

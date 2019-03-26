@@ -1,7 +1,7 @@
 package com.dmitrybrant.modelviewer;
 
 import android.app.Application;
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 
 /*
  * Copyright 2017 Dmitry Brant. All rights reserved.

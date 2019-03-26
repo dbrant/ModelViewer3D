@@ -2,7 +2,7 @@ package com.dmitrybrant.modelviewer.ply;
 
 import android.opengl.GLES20;
 import android.opengl.Matrix;
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
 
 import com.dmitrybrant.modelviewer.IndexedModel;
 import com.dmitrybrant.modelviewer.Light;
