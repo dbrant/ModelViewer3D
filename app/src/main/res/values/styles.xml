@@ -6,6 +6,23 @@
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
+
+        <item name="toolbarStyle">@style/ToolbarStyle</item>
+        <item name="popupMenuStyle">@style/PopupMenuStyle</item>
+    </style>
+
+    <style name="AppTheme.NoTitle">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowTitleSize">0dp</item>
+    </style>
+
+    <style name="ToolbarStyle">
+        <item name="android:background">@color/colorPrimary</item>
+    </style>
+
+    <style name="PopupMenuStyle" parent="Widget.AppCompat.Light.PopupMenu">
+        <item name="overlapAnchor">true</item>
     </style>
 
 </resources>

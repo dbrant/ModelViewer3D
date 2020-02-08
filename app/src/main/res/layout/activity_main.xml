@@ -23,6 +23,7 @@
         android:layout_gravity="bottom|end"
         app:backgroundTint="@color/colorPrimaryLight"
         app:useCompatPadding="true"
+        app:tint="@android:color/white"
         app:srcCompat="@drawable/ic_google_cardboard"/>
 
 </FrameLayout>
