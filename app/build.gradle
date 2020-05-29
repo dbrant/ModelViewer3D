@@ -36,7 +36,7 @@ dependencies {
         exclude group: 'com.android.support', module: 'support-annotations'
     })
     implementation 'com.google.android.material:material:1.1.0'
-    implementation 'com.squareup.okhttp3:okhttp:4.3.1'
+    implementation 'com.squareup.okhttp3:okhttp:4.7.2'
     implementation 'com.google.vr:sdk-base:1.190.0'
     testImplementation 'junit:junit:4.13'
 }
