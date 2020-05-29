@@ -38,5 +38,5 @@ dependencies {
     implementation 'com.google.android.material:material:1.1.0'
     implementation 'com.squareup.okhttp3:okhttp:4.3.1'
     implementation 'com.google.vr:sdk-base:1.190.0'
-    testImplementation 'junit:junit:4.12'
+    testImplementation 'junit:junit:4.13'
 }
