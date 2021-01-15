@@ -95,8 +95,8 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         val vbb = ByteBuffer.allocateDirect(floatArray.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         vertexBuffer = vbb.asFloatBuffer()
-        vertexBuffer.put(floatArray)
-        vertexBuffer.position(0)
+        vertexBuffer!!.put(floatArray)
+        vertexBuffer!!.position(0)
     }
 
     @Throws(IOException::class)

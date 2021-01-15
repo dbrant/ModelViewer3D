@@ -5,6 +5,7 @@ import android.graphics.PointF
 import android.opengl.GLSurfaceView
 import android.view.MotionEvent
 import com.dmitrybrant.modelviewer.util.Util.pxToDp
+import kotlin.math.sqrt
 
 /*
 * Copyright 2017 Dmitry Brant. All rights reserved.
@@ -28,6 +29,7 @@ class ModelSurfaceView(context: Context, model: Model?) : GLSurfaceView(context)
     private val pinchStartPoint = PointF()
     private var pinchStartDistance = 0.0f
     private var touchMode = TOUCH_NONE
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.action and MotionEvent.ACTION_MASK) {
             MotionEvent.ACTION_DOWN -> {
@@ -81,7 +83,7 @@ class ModelSurfaceView(context: Context, model: Model?) : GLSurfaceView(context)
     private fun getPinchDistance(event: MotionEvent): Float {
         val x = event.getX(0) - event.getX(1)
         val y = event.getY(0) - event.getY(1)
-        return Math.sqrt((x * x + y * y).toDouble()).toFloat()
+        return sqrt((x * x + y * y).toDouble()).toFloat()
     }
 
     private fun getPinchCenterPoint(event: MotionEvent, pt: PointF) {

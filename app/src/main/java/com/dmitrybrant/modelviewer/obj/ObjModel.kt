@@ -171,8 +171,8 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         var vbb = ByteBuffer.allocateDirect(floatArray.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         vertexBuffer = vbb.asFloatBuffer()
-        vertexBuffer.put(floatArray)
-        vertexBuffer.position(0)
+        vertexBuffer!!.put(floatArray)
+        vertexBuffer!!.position(0)
         indexCount = indices.size
         val intArray = IntArray(indexCount)
         for (i in 0 until indexCount) {
@@ -181,8 +181,8 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         vbb = ByteBuffer.allocateDirect(indexCount * BYTES_PER_INT)
         vbb.order(ByteOrder.nativeOrder())
         indexBuffer = vbb.asIntBuffer()
-        indexBuffer.put(intArray)
-        indexBuffer.position(0)
+        indexBuffer!!.put(intArray)
+        indexBuffer!!.position(0)
         val normalArray = FloatArray(vertices.size)
         var vi: Int
         var ni: Int
@@ -196,8 +196,8 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         vbb = ByteBuffer.allocateDirect(normalArray.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         normalBuffer = vbb.asFloatBuffer()
-        normalBuffer.put(normalArray)
-        normalBuffer.position(0)
+        normalBuffer!!.put(normalArray)
+        normalBuffer!!.position(0)
     }
 
     companion object {

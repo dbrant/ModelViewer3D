@@ -61,13 +61,13 @@ class Floor : ArrayModel() {
         var vbb = ByteBuffer.allocateDirect(coords.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         vertexBuffer = vbb.asFloatBuffer()
-        vertexBuffer.put(coords)
-        vertexBuffer.position(0)
+        vertexBuffer!!.put(coords)
+        vertexBuffer!!.position(0)
         vbb = ByteBuffer.allocateDirect(normals.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         normalBuffer = vbb.asFloatBuffer()
-        normalBuffer.put(normals)
-        normalBuffer.position(0)
+        normalBuffer!!.put(normals)
+        normalBuffer!!.position(0)
         if (GLES20.glIsProgram(glProgram)) {
             GLES20.glDeleteProgram(glProgram)
             glProgram = -1

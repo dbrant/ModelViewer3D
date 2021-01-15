@@ -21,6 +21,7 @@ import java.nio.IntBuffer
 open class IndexedModel : ArrayModel() {
     protected var indexBuffer: IntBuffer? = null
     protected var indexCount = 0
+
     override fun drawFunc() {
         if (indexBuffer == null || indexCount == 0) {
             return
@@ -29,6 +30,6 @@ open class IndexedModel : ArrayModel() {
     }
 
     companion object {
-        protected const val BYTES_PER_INT = 4
+        const val BYTES_PER_INT = 4
     }
 }

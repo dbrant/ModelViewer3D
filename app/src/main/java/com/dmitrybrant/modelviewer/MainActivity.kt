@@ -33,6 +33,7 @@ import okhttp3.Request
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.util.*
 
 /*
 * Copyright 2017 Dmitry Brant. All rights reserved.
@@ -50,29 +51,30 @@ import java.io.InputStream
 * limitations under the License.
 */
 class MainActivity : AppCompatActivity() {
-    private var app: ModelViewerApplication? = null
     private var modelView: ModelSurfaceView? = null
     private var containerView: ViewGroup? = null
     private var progressBar: ProgressBar? = null
     private var vrButton: View? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        app = ModelViewerApplication.getInstance()
         containerView = findViewById(R.id.container_view)
         progressBar = findViewById(R.id.model_progress_bar)
-        progressBar.setVisibility(View.GONE)
+        progressBar!!.setVisibility(View.GONE)
         progressBar = findViewById(R.id.model_progress_bar)
         vrButton = findViewById(R.id.vr_fab)
-        vrButton.setOnClickListener(View.OnClickListener { v: View? -> startVrActivity() })
+        vrButton!!.setOnClickListener { startVrActivity() }
+
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.container_view)) { v: View?, insets: WindowInsetsCompat ->
-            val params = vrButton.getLayoutParams() as FrameLayout.LayoutParams
+            val params = vrButton!!.layoutParams as FrameLayout.LayoutParams
             params.topMargin = insets.systemWindowInsetTop
             params.bottomMargin = insets.systemWindowInsetBottom
             params.leftMargin = insets.systemWindowInsetLeft
             params.rightMargin = insets.systemWindowInsetRight
             insets.consumeSystemWindowInsets()
         }
+
         if (intent.data != null && savedInstanceState == null) {
             beginLoadModel(intent.data!!)
         }
@@ -80,9 +82,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        createNewModelView(app!!.currentModel)
-        if (app!!.currentModel != null) {
-            title = app!!.currentModel!!.title
+        createNewModelView(ModelViewerApplication.instance!!.currentModel)
+        if (ModelViewerApplication.instance!!.currentModel != null) {
+            title = ModelViewerApplication.instance!!.currentModel!!.title
         }
     }
 
@@ -172,21 +174,22 @@ class MainActivity : AppCompatActivity() {
         if (modelView != null) {
             containerView!!.removeView(modelView)
         }
-        ModelViewerApplication.getInstance().currentModel = model
+        ModelViewerApplication.instance!!.currentModel = model
         modelView = ModelSurfaceView(this, model)
         containerView!!.addView(modelView, 0)
     }
 
     private inner class ModelLoadTask : AsyncTask<Uri?, Int?, Model?>() {
-        protected override fun doInBackground(vararg file: Uri): Model? {
+
+        override fun doInBackground(vararg file: Uri?): Model? {
             var stream: InputStream? = null
             try {
                 val uri = file[0]
                 val cr = applicationContext.contentResolver
-                val fileName = getFileName(cr, uri)
+                val fileName = getFileName(cr, uri!!)
                 stream = if ("http" == uri.scheme || "https" == uri.scheme) {
                     val client = OkHttpClient()
-                    val request: Request = Builder().url(uri.toString()).build()
+                    val request: Request = Request.Builder().url(uri.toString()).build()
                     val response = client.newCall(request).execute()
 
                     // TODO: figure out how to NOT need to read the whole file at once.
@@ -197,11 +200,11 @@ class MainActivity : AppCompatActivity() {
                 if (stream != null) {
                     val model: Model
                     if (!TextUtils.isEmpty(fileName)) {
-                        model = if (fileName!!.toLowerCase().endsWith(".stl")) {
+                        model = if (fileName!!.toLowerCase(Locale.ROOT).endsWith(".stl")) {
                             StlModel(stream)
-                        } else if (fileName.toLowerCase().endsWith(".obj")) {
+                        } else if (fileName.toLowerCase(Locale.ROOT).endsWith(".obj")) {
                             ObjModel(stream)
-                        } else if (fileName.toLowerCase().endsWith(".ply")) {
+                        } else if (fileName.toLowerCase(Locale.ROOT).endsWith(".ply")) {
                             PlyModel(stream)
                         } else {
                             // assume it's STL.
@@ -223,7 +226,6 @@ class MainActivity : AppCompatActivity() {
             return null
         }
 
-        protected override fun onProgressUpdate(vararg progress: Int) {}
         override fun onPostExecute(model: Model?) {
             if (isDestroyed) {
                 return
@@ -262,7 +264,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startVrActivity() {
-        if (app!!.currentModel == null) {
+        if (ModelViewerApplication.instance!!.currentModel == null) {
             Toast.makeText(this, R.string.view_vr_not_loaded, Toast.LENGTH_SHORT).show()
         } else {
             startActivity(Intent(this, ModelGvrActivity::class.java))

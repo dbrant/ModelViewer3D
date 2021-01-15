@@ -34,7 +34,9 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
     private var translateX = 0f
     private var translateY = 0f
     private var translateZ = 0f
+
     private var model: Model? = null
+
     private val light = Light(floatArrayOf(0.0f, 0.0f, MODEL_BOUND_SIZE * 10, 1.0f))
     private val viewMatrix = FloatArray(16)
     private val finalViewMatrix = FloatArray(16)
@@ -44,12 +46,13 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
     private val inverseHeadView = FloatArray(16)
     private val headRotation = FloatArray(4)
     private val headEulerAngles = FloatArray(3)
+
     public override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         initializeGvrView()
     }
 
-    fun initializeGvrView() {
+    private fun initializeGvrView() {
         setContentView(R.layout.activity_gvr)
         val gvrView: GvrView = findViewById(R.id.gvr_view)
         gvrView.setEGLConfigChooser(8, 8, 8, 8, 16, 8)
@@ -66,7 +69,7 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
             // sustained performance mode.
             AndroidCompat.setSustainedPerformanceMode(this, true)
         }
-        model = ModelViewerApplication.getInstance().currentModel
+        model = ModelViewerApplication.instance!!.currentModel
         setGvrView(gvrView)
     }
 
@@ -156,7 +159,7 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
 
     // TODO: use for something.
     private val isLookingAtObject: Boolean
-        private get() {
+        get() {
             if (model == null) {
                 return false
             }

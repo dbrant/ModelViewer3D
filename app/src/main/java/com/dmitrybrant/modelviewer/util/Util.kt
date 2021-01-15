@@ -79,7 +79,7 @@ object Util {
     }
 
     private val densityScalar: Float
-        get() = ModelViewerApplication.getInstance().resources.displayMetrics.density
+        get() = ModelViewerApplication.instance!!.resources.displayMetrics.density
 
     private fun loadShader(type: Int, shaderCode: String): Int {
         val shader = GLES20.glCreateShader(type)
@@ -99,7 +99,7 @@ object Util {
     }
 
     private fun readTextFileFromRawRes(@RawRes resourceId: Int): String {
-        val inputStream = ModelViewerApplication.getInstance().resources.openRawResource(resourceId)
+        val inputStream = ModelViewerApplication.instance!!.resources.openRawResource(resourceId)
         try {
             val bytes = ByteArray(inputStream.available())
             inputStream.read(bytes)

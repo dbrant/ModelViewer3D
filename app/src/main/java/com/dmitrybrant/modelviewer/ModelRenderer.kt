@@ -24,13 +24,16 @@ import javax.microedition.khronos.opengles.GL10
 class ModelRenderer(private val model: Model?) : GLSurfaceView.Renderer {
     private val light = Light(floatArrayOf(0.0f, 0.0f, MODEL_BOUND_SIZE * 10, 1.0f))
     private val floor = Floor()
+
     private val projectionMatrix = FloatArray(16)
     private val viewMatrix = FloatArray(16)
+
     private var rotateAngleX = 0f
     private var rotateAngleY = 0f
     private var translateX = 0f
     private var translateY = 0f
     private var translateZ = 0f
+
     fun translate(dx: Float, dy: Float, dz: Float) {
         val translateScaleFactor = MODEL_BOUND_SIZE / 200f
         translateX += dx * translateScaleFactor
