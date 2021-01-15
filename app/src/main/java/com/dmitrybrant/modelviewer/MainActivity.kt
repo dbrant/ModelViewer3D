@@ -13,9 +13,7 @@ import android.text.TextUtils
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import android.view.ViewGroup
 import android.widget.FrameLayout
-import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -23,6 +21,7 @@ import androidx.core.content.ContentResolverCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.dmitrybrant.modelviewer.databinding.ActivityMainBinding
 import com.dmitrybrant.modelviewer.gvr.ModelGvrActivity
 import com.dmitrybrant.modelviewer.obj.ObjModel
 import com.dmitrybrant.modelviewer.ply.PlyModel
@@ -51,23 +50,19 @@ import java.util.*
 * limitations under the License.
 */
 class MainActivity : AppCompatActivity() {
+    private lateinit var binding: ActivityMainBinding
     private var modelView: ModelSurfaceView? = null
-    private var containerView: ViewGroup? = null
-    private var progressBar: ProgressBar? = null
-    private var vrButton: View? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-        containerView = findViewById(R.id.container_view)
-        progressBar = findViewById(R.id.model_progress_bar)
-        progressBar!!.setVisibility(View.GONE)
-        progressBar = findViewById(R.id.model_progress_bar)
-        vrButton = findViewById(R.id.vr_fab)
-        vrButton!!.setOnClickListener { startVrActivity() }
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.container_view)) { v: View?, insets: WindowInsetsCompat ->
-            val params = vrButton!!.layoutParams as FrameLayout.LayoutParams
+        binding.progressBar.visibility = View.GONE
+        binding.actionButton.setOnClickListener { startVrActivity() }
+
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.containerView)) { _: View?, insets: WindowInsetsCompat ->
+            val params = binding.actionButton.layoutParams as FrameLayout.LayoutParams
             params.topMargin = insets.systemWindowInsetTop
             params.bottomMargin = insets.systemWindowInsetBottom
             params.leftMargin = insets.systemWindowInsetLeft
@@ -128,7 +123,7 @@ class MainActivity : AppCompatActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>,
                                             grantResults: IntArray) {
         when (requestCode) {
-            READ_PERMISSION_REQUEST -> if (grantResults.size > 0
+            READ_PERMISSION_REQUEST -> if (grantResults.isNotEmpty()
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 beginOpenModel()
             } else {
@@ -166,17 +161,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun beginLoadModel(uri: Uri) {
-        progressBar!!.visibility = View.VISIBLE
+        binding.progressBar.visibility = View.VISIBLE
         ModelLoadTask().execute(uri)
     }
 
     private fun createNewModelView(model: Model?) {
         if (modelView != null) {
-            containerView!!.removeView(modelView)
+            binding.containerView.removeView(modelView)
         }
         ModelViewerApplication.instance!!.currentModel = model
         modelView = ModelSurfaceView(this, model)
-        containerView!!.addView(modelView, 0)
+        binding.containerView.addView(modelView, 0)
     }
 
     private inner class ModelLoadTask : AsyncTask<Uri?, Int?, Model?>() {
@@ -234,7 +229,7 @@ class MainActivity : AppCompatActivity() {
                 setCurrentModel(model)
             } else {
                 Toast.makeText(applicationContext, R.string.open_model_error, Toast.LENGTH_SHORT).show()
-                progressBar!!.visibility = View.GONE
+                binding.progressBar.visibility = View.GONE
             }
         }
 
@@ -260,7 +255,7 @@ class MainActivity : AppCompatActivity() {
         createNewModelView(model)
         Toast.makeText(applicationContext, R.string.open_model_success, Toast.LENGTH_SHORT).show()
         title = model.title
-        progressBar!!.visibility = View.GONE
+        binding.progressBar.visibility = View.GONE
     }
 
     private fun startVrActivity() {

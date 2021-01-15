@@ -16,6 +16,9 @@ android {
             abiFilters 'armeabi-v7a', 'arm64-v8a'
         }
     }
+    buildFeatures {
+        viewBinding true
+    }
     buildTypes {
         release {
             minifyEnabled false

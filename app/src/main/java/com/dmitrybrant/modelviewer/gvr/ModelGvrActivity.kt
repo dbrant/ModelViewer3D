@@ -7,7 +7,7 @@ import android.util.Log
 import com.dmitrybrant.modelviewer.Light
 import com.dmitrybrant.modelviewer.Model
 import com.dmitrybrant.modelviewer.ModelViewerApplication
-import com.dmitrybrant.modelviewer.R
+import com.dmitrybrant.modelviewer.databinding.ActivityGvrBinding
 import com.dmitrybrant.modelviewer.util.Util.checkGLError
 import com.google.vr.sdk.base.*
 import com.google.vr.sdk.base.GvrView.StereoRenderer
@@ -29,6 +29,8 @@ import javax.microedition.khronos.egl.EGLConfig
 * limitations under the License.
 */
 class ModelGvrActivity : GvrActivity(), StereoRenderer {
+    private lateinit var binding: ActivityGvrBinding
+
     private var rotateAngleX = 0f
     private var rotateAngleY = 0f
     private var translateX = 0f
@@ -52,25 +54,27 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
         initializeGvrView()
     }
 
-    private fun initializeGvrView() {
-        setContentView(R.layout.activity_gvr)
-        val gvrView: GvrView = findViewById(R.id.gvr_view)
-        gvrView.setEGLConfigChooser(8, 8, 8, 8, 16, 8)
-        gvrView.setRenderer(this)
-        gvrView.setTransitionViewEnabled(true)
+    private fun initializeGvrView()
+    {
+        binding = ActivityGvrBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        binding.gvrView.setEGLConfigChooser(8, 8, 8, 8, 16, 8)
+        binding.gvrView.setRenderer(this)
+        binding.gvrView.setTransitionViewEnabled(true)
 
         // Enable Cardboard-trigger feedback with Daydream headsets. This is a simple way of supporting
         // Daydream controller input for basic interactions using the existing Cardboard trigger API.
-        gvrView.enableCardboardTriggerEmulation()
-        gvrView.setOnCloseButtonListener { finish() }
-        if (gvrView.setAsyncReprojectionEnabled(true)) {
+        binding.gvrView.enableCardboardTriggerEmulation()
+        binding.gvrView.setOnCloseButtonListener { finish() }
+        if (binding.gvrView.setAsyncReprojectionEnabled(true)) {
             // Async reprojection decouples the app framerate from the display framerate,
             // allowing immersive interaction even at the throttled clockrates set by
             // sustained performance mode.
             AndroidCompat.setSustainedPerformanceMode(this, true)
         }
         model = ModelViewerApplication.instance!!.currentModel
-        setGvrView(gvrView)
+        gvrView = binding.gvrView
     }
 
     public override fun onPause() {
