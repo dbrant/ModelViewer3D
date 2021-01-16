@@ -38,12 +38,12 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         floorOffset = (minY - centerMassY) / scale
     }
 
-    @Throws(IOException::class)
     private fun readText(stream: InputStream) {
         val normalBucket: MutableList<Float> = ArrayList()
         val vertices: MutableList<Float> = ArrayList()
         val indices: MutableList<Int> = ArrayList()
         val normalIndices: MutableList<Int> = ArrayList()
+
         val reader = BufferedReader(InputStreamReader(stream), INPUT_BUFFER_SIZE)
         var line: String
         var lineArr: Array<String>
@@ -53,18 +53,22 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         var index3: Int
         var index4: Int
         val customNormal = FloatArray(3)
+
         var x: Float
         var y: Float
         var z: Float
         var centerMassX = 0.0
         var centerMassY = 0.0
         var centerMassZ = 0.0
+
         for (i in intArr.indices) {
             intArr[i] = IntArray(8)
         }
+
         while (reader.readLine().also { line = it } != null) {
             line = line.trim { it <= ' ' }
             lineArr = line.split("\\s+".toRegex()).toTypedArray()
+
             if (lineArr.size > 3 && lineArr[0] == "v") {
                 x = lineArr[1].toFloat()
                 y = lineArr[2].toFloat()
@@ -160,10 +164,12 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
             }
             // TODO: Support texture coordinates ("vt")
         }
+
         vertexCount = vertices.size / 3
         this.centerMassX = (centerMassX / vertexCount).toFloat()
         this.centerMassY = (centerMassY / vertexCount).toFloat()
         this.centerMassZ = (centerMassZ / vertexCount).toFloat()
+
         val floatArray = FloatArray(vertices.size)
         for (i in vertices.indices) {
             floatArray[i] = vertices[i]
@@ -174,6 +180,7 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         vertexBuffer!!.put(floatArray)
         vertexBuffer!!.position(0)
         indexCount = indices.size
+
         val intArray = IntArray(indexCount)
         for (i in 0 until indexCount) {
             intArray[i] = indices[i]
@@ -183,6 +190,7 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         indexBuffer = vbb.asIntBuffer()
         indexBuffer!!.put(intArray)
         indexBuffer!!.position(0)
+
         val normalArray = FloatArray(vertices.size)
         var vi: Int
         var ni: Int
@@ -217,7 +225,7 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
             ints[2] = -1
             for (i in 0 until len) {
                 val c = str[i]
-                if (c >= '0' && c <= '9') {
+                if (c in '0'..'9') {
                     if (currentInt == -1) {
                         currentInt = c - '0'
                     } else {

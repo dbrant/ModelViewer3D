@@ -38,7 +38,6 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
         floorOffset = (minZ - centerMassZ) / scale
     }
 
-    @Throws(IOException::class)
     private fun isTextFormat(stream: InputStream): Boolean {
         val testBytes = ByteArray(ASCII_TEST_SIZE)
         val bytesRead = stream.read(testBytes, 0, testBytes.size)
@@ -46,7 +45,6 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
         return string.contains("solid") && string.contains("facet") && string.contains("vertex")
     }
 
-    @Throws(IOException::class)
     private fun readText(stream: InputStream) {
         val normals: MutableList<Float> = ArrayList()
         val vertices: MutableList<Float> = ArrayList()
@@ -57,6 +55,7 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
         var centerMassX = 0.0
         var centerMassY = 0.0
         var centerMassZ = 0.0
+
         while (reader.readLine().also { line = it } != null) {
             line = line.trim { it <= ' ' }
             if (line.startsWith("facet")) {
@@ -89,10 +88,12 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
                 centerMassZ += z.toDouble()
             }
         }
+
         vertexCount = vertices.size / 3
         this.centerMassX = (centerMassX / vertexCount).toFloat()
         this.centerMassY = (centerMassY / vertexCount).toFloat()
         this.centerMassZ = (centerMassZ / vertexCount).toFloat()
+
         var floatArray = FloatArray(vertices.size)
         for (i in vertices.indices) {
             floatArray[i] = vertices[i]
@@ -106,6 +107,7 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
         for (i in normals.indices) {
             floatArray[i] = normals[i]
         }
+
         vbb = ByteBuffer.allocateDirect(floatArray.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         normalBuffer = vbb.asFloatBuffer()
@@ -113,17 +115,18 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
         normalBuffer!!.position(0)
     }
 
-    @Throws(IOException::class)
     private fun readBinary(inputStream: BufferedInputStream) {
         val chunkSize = 50
         val tempBytes = ByteArray(chunkSize)
         inputStream.skip(HEADER_SIZE.toLong())
         inputStream.read(tempBytes, 0, BYTES_PER_FLOAT)
+
         val vectorSize: Int = Util.readIntLe(tempBytes, 0)
         vertexCount = vectorSize * 3
         if (vertexCount < 0 || vertexCount > 10000000) {
             throw IOException("Invalid model.")
         }
+
         var centerMassX = 0.0
         var centerMassY = 0.0
         var centerMassZ = 0.0
@@ -188,6 +191,7 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
         this.centerMassX = (centerMassX / vertexCount).toFloat()
         this.centerMassY = (centerMassY / vertexCount).toFloat()
         this.centerMassZ = (centerMassZ / vertexCount).toFloat()
+
         if (!haveNormals) {
             val customNormal = FloatArray(3)
             var i = 0
@@ -208,11 +212,13 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
                 i += 3
             }
         }
+
         var vbb = ByteBuffer.allocateDirect(vertexArray.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         vertexBuffer = vbb.asFloatBuffer()
         vertexBuffer!!.put(vertexArray)
         vertexBuffer!!.position(0)
+
         vbb = ByteBuffer.allocateDirect(normalArray.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         normalBuffer = vbb.asFloatBuffer()
@@ -235,6 +241,7 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
         } else {
             readBinary(stream)
         }
+
         if (vertexCount <= 0 || vertexBuffer == null || normalBuffer == null) {
             throw IOException("Invalid model.")
         }

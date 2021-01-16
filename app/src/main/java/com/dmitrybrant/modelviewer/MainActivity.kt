@@ -236,14 +236,9 @@ class MainActivity : AppCompatActivity() {
         private fun getFileName(cr: ContentResolver, uri: Uri): String? {
             if ("content" == uri.scheme) {
                 val projection = arrayOf(MediaStore.MediaColumns.DISPLAY_NAME)
-                val metaCursor = ContentResolverCompat.query(cr, uri, projection, null, null, null, null)
-                if (metaCursor != null) {
-                    try {
-                        if (metaCursor.moveToFirst()) {
-                            return metaCursor.getString(0)
-                        }
-                    } finally {
-                        metaCursor.close()
+                ContentResolverCompat.query(cr, uri, projection, null, null, null, null)?.use { metaCursor ->
+                    if (metaCursor.moveToFirst()) {
+                        return metaCursor.getString(0)
                     }
                 }
             }
@@ -288,6 +283,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val READ_PERMISSION_REQUEST = 100
         private const val OPEN_DOCUMENT_REQUEST = 101
+
         private val SAMPLE_MODELS = arrayOf("bunny.stl", "dragon.stl", "lucy.stl")
         private var sampleModelIndex = 0
     }

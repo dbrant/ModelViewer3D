@@ -33,6 +33,7 @@ import java.util.*
 */
 class PlyModel(inputStream: InputStream) : IndexedModel() {
     private val pointColor = floatArrayOf(1.0f, 1.0f, 1.0f)
+
     override fun init(boundSize: Float) {
         if (GLES20.glIsProgram(glProgram)) {
             GLES20.glDeleteProgram(glProgram)
@@ -52,7 +53,6 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         floorOffset = (minY - centerMassY) / scale
     }
 
-    @Throws(IOException::class)
     private fun readText(stream: BufferedInputStream) {
         val vertices: MutableList<Float> = ArrayList()
         val reader = BufferedReader(InputStreamReader(stream), INPUT_BUFFER_SIZE)
@@ -64,7 +64,8 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         This is currently pretty limited. We expect the header to contain a line of
         "element vertex nnn", and the list of vertices to follow immediately after the
         header, and each vertex to have the format "x, y, z, ...".
-        */stream.mark(0x100000)
+        */
+        stream.mark(0x100000)
         var isBinary = false
         while (reader.readLine().also { line = it } != null) {
             line = line.trim { it <= ' ' }
@@ -82,12 +83,14 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         if (vertexCount <= 0) {
             return
         }
+
         if (isBinary) {
             stream.reset()
             readVerticesBinary(vertices, stream)
         } else {
             readVerticesText(vertices, reader)
         }
+
         val floatArray = FloatArray(vertices.size)
         for (i in vertices.indices) {
             floatArray[i] = vertices[i]
@@ -99,7 +102,6 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         vertexBuffer!!.position(0)
     }
 
-    @Throws(IOException::class)
     private fun readVerticesText(vertices: MutableList<Float>, reader: BufferedReader) {
         var lineArr: Array<String>
         var x: Float
@@ -108,6 +110,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         var centerMassX = 0.0
         var centerMassY = 0.0
         var centerMassZ = 0.0
+
         for (i in 0 until vertexCount) {
             lineArr = reader.readLine().trim { it <= ' ' }.split(" ".toRegex()).toTypedArray()
             x = lineArr[0].toFloat()
@@ -126,7 +129,6 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         this.centerMassZ = (centerMassZ / vertexCount).toFloat()
     }
 
-    @Throws(IOException::class)
     private fun readVerticesBinary(vertices: MutableList<Float>, stream: BufferedInputStream) {
         val tempBytes = ByteArray(0x1000)
         stream.mark(1)
@@ -135,12 +137,14 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         val contentsPos = tempStr.indexOf("end_header") + 11
         stream.reset()
         stream.skip(contentsPos.toLong())
+
         var x: Float
         var y: Float
         var z: Float
         var centerMassX = 0.0
         var centerMassY = 0.0
         var centerMassZ = 0.0
+
         for (i in 0 until vertexCount) {
             stream.read(tempBytes, 0, BYTES_PER_FLOAT * 3)
             x = java.lang.Float.intBitsToFloat(readIntLe(tempBytes, 0))

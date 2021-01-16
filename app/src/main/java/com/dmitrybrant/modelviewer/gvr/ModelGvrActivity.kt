@@ -12,6 +12,8 @@ import com.dmitrybrant.modelviewer.util.Util.checkGLError
 import com.google.vr.sdk.base.*
 import com.google.vr.sdk.base.GvrView.StereoRenderer
 import javax.microedition.khronos.egl.EGLConfig
+import kotlin.math.abs
+import kotlin.math.atan2
 
 /*
 * Copyright 2017 Dmitry Brant. All rights reserved.
@@ -77,14 +79,6 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
         gvrView = binding.gvrView
     }
 
-    public override fun onPause() {
-        super.onPause()
-    }
-
-    public override fun onResume() {
-        super.onResume()
-    }
-
     override fun onRendererShutdown() {
         Log.i(TAG, "onRendererShutdown")
     }
@@ -127,9 +121,11 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
         Matrix.invertM(inverseHeadView, 0, headView, 0)
         headTransform.getQuaternion(headRotation, 0)
         headTransform.getEulerAngles(headEulerAngles, 0)
+
         headEulerAngles[0] *= RAD2DEG
         headEulerAngles[1] *= RAD2DEG
         headEulerAngles[2] *= RAD2DEG
+
         updateViewMatrix()
         checkGLError("onNewFrame")
     }
@@ -149,17 +145,17 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
         Matrix.rotateM(finalViewMatrix, 0, -headEulerAngles[1], 0.0f, 1.0f, 0.0f)
         Matrix.rotateM(finalViewMatrix, 0, headEulerAngles[2], 0.0f, 0.0f, 1.0f)
         val perspective = eye.getPerspective(Z_NEAR, Z_FAR)
-        if (model != null) {
-            model!!.draw(finalViewMatrix, perspective, light)
-        }
+
+        model?.draw(finalViewMatrix, perspective, light)
         checkGLError("onDrawEye")
     }
 
-    override fun onFinishFrame(viewport: Viewport) {}
+    override fun onFinishFrame(viewport: Viewport) { }
+
     override fun onCardboardTrigger() {
         Log.i(TAG, "onCardboardTrigger")
         // TODO: use for something
-    }// Convert object space to camera space. Use the headView from onNewFrame.
+    }
 
     // TODO: use for something.
     private val isLookingAtObject: Boolean
@@ -170,9 +166,9 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
             // Convert object space to camera space. Use the headView from onNewFrame.
             Matrix.multiplyMM(tempMatrix, 0, headView, 0, model!!.modelMatrix, 0)
             Matrix.multiplyMV(tempPosition, 0, tempMatrix, 0, POS_MATRIX_MULTIPLY_VEC, 0)
-            val pitch = Math.atan2(tempPosition[1].toDouble(), (-tempPosition[2]).toDouble()).toFloat()
-            val yaw = Math.atan2(tempPosition[0].toDouble(), (-tempPosition[2]).toDouble()).toFloat()
-            return Math.abs(pitch) < PITCH_LIMIT && Math.abs(yaw) < YAW_LIMIT
+            val pitch = atan2(tempPosition[1].toDouble(), (-tempPosition[2]).toDouble()).toFloat()
+            val yaw = atan2(tempPosition[0].toDouble(), (-tempPosition[2]).toDouble()).toFloat()
+            return abs(pitch) < PITCH_LIMIT && abs(yaw) < YAW_LIMIT
         }
 
     companion object {

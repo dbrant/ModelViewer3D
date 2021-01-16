@@ -24,13 +24,10 @@ import java.io.IOException
 */
 object Util {
     @JvmStatic
-    fun compileProgram(@RawRes vertexShader: Int, @RawRes fragmentShader: Int,
-                       attributes: Array<String?>): Int {
+    fun compileProgram(@RawRes vertexShader: Int, @RawRes fragmentShader: Int, attributes: Array<String?>): Int {
         val program = GLES20.glCreateProgram()
-        GLES20.glAttachShader(program, loadShader(GLES20.GL_VERTEX_SHADER,
-                readTextFileFromRawRes(vertexShader)))
-        GLES20.glAttachShader(program, loadShader(GLES20.GL_FRAGMENT_SHADER,
-                readTextFileFromRawRes(fragmentShader)))
+        GLES20.glAttachShader(program, loadShader(GLES20.GL_VERTEX_SHADER, readTextFileFromRawRes(vertexShader)))
+        GLES20.glAttachShader(program, loadShader(GLES20.GL_FRAGMENT_SHADER, readTextFileFromRawRes(fragmentShader)))
         for (i in attributes.indices) {
             GLES20.glBindAttribLocation(program, i, attributes[i])
         }

@@ -25,6 +25,7 @@ class Floor : ArrayModel() {
     private val floorColor = floatArrayOf(0.2f, 0.2f, 0.2f, 0.5f)
     private val lineColor = floatArrayOf(0.6f, 0.6f, 0.6f, 0.5f)
     private var extent = 0f
+
     override fun init(boundSize: Float) {
         extent = boundSize * 5.0f
 
@@ -58,16 +59,19 @@ class Floor : ArrayModel() {
         minZ = -extent
         maxZ = extent
         vertexCount = coords.size / COORDS_PER_VERTEX
+
         var vbb = ByteBuffer.allocateDirect(coords.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         vertexBuffer = vbb.asFloatBuffer()
         vertexBuffer!!.put(coords)
         vertexBuffer!!.position(0)
+
         vbb = ByteBuffer.allocateDirect(normals.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         normalBuffer = vbb.asFloatBuffer()
         normalBuffer!!.put(normals)
         normalBuffer!!.position(0)
+
         if (GLES20.glIsProgram(glProgram)) {
             GLES20.glDeleteProgram(glProgram)
             glProgram = -1
@@ -84,6 +88,7 @@ class Floor : ArrayModel() {
         if (vertexBuffer == null || normalBuffer == null) {
             return
         }
+
         GLES20.glUseProgram(glProgram)
         val modelMatrixHandle = GLES20.glGetUniformLocation(glProgram, "u_Model")
         val mvpMatrixHandle = GLES20.glGetUniformLocation(glProgram, "u_MVP")
