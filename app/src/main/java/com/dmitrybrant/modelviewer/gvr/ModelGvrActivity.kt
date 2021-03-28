@@ -5,7 +5,6 @@ import android.opengl.Matrix
 import android.os.Bundle
 import android.util.Log
 import com.dmitrybrant.modelviewer.Light
-import com.dmitrybrant.modelviewer.Model
 import com.dmitrybrant.modelviewer.ModelViewerApplication
 import com.dmitrybrant.modelviewer.databinding.ActivityGvrBinding
 import com.dmitrybrant.modelviewer.util.Util.checkGLError
@@ -38,8 +37,6 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
     private var translateX = 0f
     private var translateY = 0f
     private var translateZ = 0f
-
-    private var model: Model? = null
 
     private val light = Light(floatArrayOf(0.0f, 0.0f, MODEL_BOUND_SIZE * 10, 1.0f))
     private val viewMatrix = FloatArray(16)
@@ -75,7 +72,6 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
             // sustained performance mode.
             AndroidCompat.setSustainedPerformanceMode(this, true)
         }
-        model = ModelViewerApplication.instance!!.currentModel
         gvrView = binding.gvrView
     }
 
@@ -103,9 +99,7 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
         GLES20.glClearColor(0.2f, 0.2f, 0.2f, 1f)
         GLES20.glEnable(GLES20.GL_CULL_FACE)
         GLES20.glEnable(GLES20.GL_DEPTH_TEST)
-        if (model != null) {
-            model!!.init(MODEL_BOUND_SIZE)
-        }
+        ModelViewerApplication.currentModel?.init(MODEL_BOUND_SIZE)
         checkGLError("onSurfaceCreated")
     }
 
@@ -146,7 +140,7 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
         Matrix.rotateM(finalViewMatrix, 0, headEulerAngles[2], 0.0f, 0.0f, 1.0f)
         val perspective = eye.getPerspective(Z_NEAR, Z_FAR)
 
-        model?.draw(finalViewMatrix, perspective, light)
+        ModelViewerApplication.currentModel?.draw(finalViewMatrix, perspective, light)
         checkGLError("onDrawEye")
     }
 
@@ -160,11 +154,11 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
     // TODO: use for something.
     private val isLookingAtObject: Boolean
         get() {
-            if (model == null) {
+            if (ModelViewerApplication.currentModel == null) {
                 return false
             }
             // Convert object space to camera space. Use the headView from onNewFrame.
-            Matrix.multiplyMM(tempMatrix, 0, headView, 0, model!!.modelMatrix, 0)
+            Matrix.multiplyMM(tempMatrix, 0, headView, 0, ModelViewerApplication.currentModel!!.modelMatrix, 0)
             Matrix.multiplyMV(tempPosition, 0, tempMatrix, 0, POS_MATRIX_MULTIPLY_VEC, 0)
             val pitch = atan2(tempPosition[1].toDouble(), (-tempPosition[2]).toDouble()).toFloat()
             val yaw = atan2(tempPosition[0].toDouble(), (-tempPosition[2]).toDouble()).toFloat()

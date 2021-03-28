@@ -18,17 +18,17 @@ import android.app.Application
 * limitations under the License.
 */
 class ModelViewerApplication : Application() {
-    // Store the current model globally, so that we don't have to re-decode it upon
-    // relaunching the main or VR activities.
-    // TODO: handle this a bit better.
-    var currentModel: Model? = null
     override fun onCreate() {
         super.onCreate()
         instance = this
     }
 
     companion object {
-        var instance: ModelViewerApplication? = null
-            private set
+        lateinit var instance: ModelViewerApplication
+
+        // Store the current model globally, so that we don't have to re-decode it upon
+        // relaunching the main or VR activities.
+        // TODO: handle this a bit better.
+        var currentModel: Model? = null
     }
 }

@@ -24,7 +24,7 @@ import java.io.IOException
 */
 object Util {
     @JvmStatic
-    fun compileProgram(@RawRes vertexShader: Int, @RawRes fragmentShader: Int, attributes: Array<String?>): Int {
+    fun compileProgram(@RawRes vertexShader: Int, @RawRes fragmentShader: Int, attributes: Array<String>): Int {
         val program = GLES20.glCreateProgram()
         GLES20.glAttachShader(program, loadShader(GLES20.GL_VERTEX_SHADER, readTextFileFromRawRes(vertexShader)))
         GLES20.glAttachShader(program, loadShader(GLES20.GL_FRAGMENT_SHADER, readTextFileFromRawRes(fragmentShader)))
@@ -76,7 +76,7 @@ object Util {
     }
 
     private val densityScalar: Float
-        get() = ModelViewerApplication.instance!!.resources.displayMetrics.density
+        get() = ModelViewerApplication.instance.resources.displayMetrics.density
 
     private fun loadShader(type: Int, shaderCode: String): Int {
         val shader = GLES20.glCreateShader(type)
@@ -96,7 +96,7 @@ object Util {
     }
 
     private fun readTextFileFromRawRes(@RawRes resourceId: Int): String {
-        val inputStream = ModelViewerApplication.instance!!.resources.openRawResource(resourceId)
+        val inputStream = ModelViewerApplication.instance.resources.openRawResource(resourceId)
         try {
             val bytes = ByteArray(inputStream.available())
             inputStream.read(bytes)

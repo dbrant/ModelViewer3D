@@ -84,24 +84,20 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        createNewModelView(ModelViewerApplication.instance!!.currentModel)
-        if (ModelViewerApplication.instance!!.currentModel != null) {
-            title = ModelViewerApplication.instance!!.currentModel!!.title
+        createNewModelView(ModelViewerApplication.currentModel)
+        if (ModelViewerApplication.currentModel != null) {
+            title = ModelViewerApplication.currentModel!!.title
         }
     }
 
     override fun onPause() {
         super.onPause()
-        if (modelView != null) {
-            modelView!!.onPause()
-        }
+        modelView?.onPause()
     }
 
     override fun onResume() {
         super.onResume()
-        if (modelView != null) {
-            modelView!!.onResume()
-        }
+        modelView?.onResume()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -135,8 +131,6 @@ class MainActivity : AppCompatActivity() {
                 beginOpenModel()
             } else {
                 Toast.makeText(this, R.string.read_permission_failed, Toast.LENGTH_SHORT).show()
-            }
-            else -> {
             }
         }
     }
@@ -176,7 +170,7 @@ class MainActivity : AppCompatActivity() {
         if (modelView != null) {
             binding.containerView.removeView(modelView)
         }
-        ModelViewerApplication.instance!!.currentModel = model
+        ModelViewerApplication.currentModel = model
         modelView = ModelSurfaceView(this, model)
         binding.containerView.addView(modelView, 0)
     }
@@ -261,7 +255,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startVrActivity() {
-        if (ModelViewerApplication.instance!!.currentModel == null) {
+        if (ModelViewerApplication.currentModel == null) {
             Toast.makeText(this, R.string.view_vr_not_loaded, Toast.LENGTH_SHORT).show()
         } else {
             startActivity(Intent(this, ModelGvrActivity::class.java))
