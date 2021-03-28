@@ -27,6 +27,14 @@ import java.nio.ByteOrder
 * limitations under the License.
 */
 class ObjModel(inputStream: InputStream) : IndexedModel() {
+    init {
+        val stream = BufferedInputStream(inputStream, INPUT_BUFFER_SIZE)
+        readText(stream)
+        if (vertexCount <= 0 || vertexBuffer == null || normalBuffer == null || indexCount <= 0 || indexBuffer == null) {
+            throw IOException("Invalid model.")
+        }
+    }
+
     public override fun initModelMatrix(boundSize: Float) {
         val yRotation = 180f
         initModelMatrix(boundSize, 0.0f, yRotation, 0.0f)
@@ -44,7 +52,7 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         val normalIndices = mutableListOf<Int>()
 
         val reader = BufferedReader(InputStreamReader(stream), INPUT_BUFFER_SIZE)
-        var line: String?
+        var line: String
         var lineArr: Array<String>
         val intArr = Array(4) { IntArray(8) }
         var index1: Int
@@ -60,8 +68,8 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         var centerMassY = 0.0
         var centerMassZ = 0.0
 
-        while (reader.readLine().also { line = it } != null) {
-            lineArr = line!!.trim().split("\\s+".toRegex()).toTypedArray()
+        while (reader.readLine().also { line = it.orEmpty() } != null) {
+            lineArr = line.trim().split("\\s+".toRegex()).toTypedArray()
 
             if (lineArr.size > 3 && lineArr[0] == "v") {
                 x = lineArr[1].toFloat()
@@ -238,14 +246,6 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
             if (currentInt >= 0) {
                 ints[intIndex] = currentInt
             }
-        }
-    }
-
-    init {
-        val stream = BufferedInputStream(inputStream, INPUT_BUFFER_SIZE)
-        readText(stream)
-        if (vertexCount <= 0 || vertexBuffer == null || normalBuffer == null || indexCount <= 0 || indexBuffer == null) {
-            throw IOException("Invalid model.")
         }
     }
 }

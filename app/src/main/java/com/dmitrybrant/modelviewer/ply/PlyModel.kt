@@ -10,7 +10,6 @@ import com.dmitrybrant.modelviewer.util.Util.readIntLe
 import java.io.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.*
 
 /*
 *
@@ -34,6 +33,14 @@ import java.util.*
 class PlyModel(inputStream: InputStream) : IndexedModel() {
     private val pointColor = floatArrayOf(1.0f, 1.0f, 1.0f)
 
+    init {
+        val stream = BufferedInputStream(inputStream, INPUT_BUFFER_SIZE)
+        readText(stream)
+        if (vertexCount <= 0 || vertexBuffer == null) {
+            throw IOException("Invalid model.")
+        }
+    }
+
     override fun init(boundSize: Float) {
         if (GLES20.glIsProgram(glProgram)) {
             GLES20.glDeleteProgram(glProgram)
@@ -54,7 +61,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
     }
 
     private fun readText(stream: BufferedInputStream) {
-        val vertices: MutableList<Float> = ArrayList()
+        val vertices = mutableListOf<Float>()
         val reader = BufferedReader(InputStreamReader(stream), INPUT_BUFFER_SIZE)
         var line: String
         var lineArr: Array<String>
@@ -67,8 +74,8 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         */
         stream.mark(0x100000)
         var isBinary = false
-        while (reader.readLine().also { line = it } != null) {
-            line = line.trim { it <= ' ' }
+        while (reader.readLine().also { line = it.orEmpty() } != null) {
+            line = line.trim()
             if (line.startsWith("format ")) {
                 if (line.contains("binary")) {
                     isBinary = true
@@ -112,7 +119,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         var centerMassZ = 0.0
 
         for (i in 0 until vertexCount) {
-            lineArr = reader.readLine().trim { it <= ' ' }.split(" ".toRegex()).toTypedArray()
+            lineArr = reader.readLine().trim().split(" ".toRegex()).toTypedArray()
             x = lineArr[0].toFloat()
             y = lineArr[1].toFloat()
             z = lineArr[2].toFloat()
@@ -182,13 +189,5 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         GLES20.glUniform3fv(ambientColorHandle, 1, pointColor, 0)
         GLES20.glDrawArrays(GLES20.GL_POINTS, 0, vertexCount)
         GLES20.glDisableVertexAttribArray(positionHandle)
-    }
-
-    init {
-        val stream = BufferedInputStream(inputStream, INPUT_BUFFER_SIZE)
-        readText(stream)
-        if (vertexCount <= 0 || vertexBuffer == null) {
-            throw IOException("Invalid model.")
-        }
     }
 }

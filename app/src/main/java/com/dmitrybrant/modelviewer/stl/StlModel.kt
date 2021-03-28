@@ -6,7 +6,6 @@ import com.dmitrybrant.modelviewer.util.Util.calculateNormal
 import java.io.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.*
 import java.util.regex.Pattern
 
 /*
@@ -27,6 +26,22 @@ import java.util.regex.Pattern
 * limitations under the License.
 */
 class StlModel(inputStream: InputStream) : ArrayModel() {
+    init {
+        val stream = BufferedInputStream(inputStream, INPUT_BUFFER_SIZE)
+        stream.mark(ASCII_TEST_SIZE)
+        val isText = isTextFormat(stream)
+        stream.reset()
+        if (isText) {
+            readText(stream)
+        } else {
+            readBinary(stream)
+        }
+
+        if (vertexCount <= 0 || vertexBuffer == null || normalBuffer == null) {
+            throw IOException("Invalid model.")
+        }
+    }
+
     public override fun initModelMatrix(boundSize: Float) {
         val zRotation = 180f
         val xRotation = -90.0f
@@ -46,8 +61,8 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
     }
 
     private fun readText(stream: InputStream) {
-        val normals: MutableList<Float> = ArrayList()
-        val vertices: MutableList<Float> = ArrayList()
+        val normals = mutableListOf<Float>()
+        val vertices = mutableListOf<Float>()
         val reader = BufferedReader(InputStreamReader(stream), INPUT_BUFFER_SIZE)
         var line: String
         var lineArr: Array<String>
@@ -56,10 +71,10 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
         var centerMassY = 0.0
         var centerMassZ = 0.0
 
-        while (reader.readLine().also { line = it } != null) {
-            line = line.trim { it <= ' ' }
+        while (reader.readLine().also { line = it.orEmpty() } != null) {
+            line = line.trim()
             if (line.startsWith("facet")) {
-                line = line.replaceFirst("facet normal ".toRegex(), "").trim { it <= ' ' }
+                line = line.replaceFirst("facet normal ".toRegex(), "").trim()
                 lineArr = pattern.split(line, 0)
                 val x = lineArr[0].toFloat()
                 val y = lineArr[1].toFloat()
@@ -74,7 +89,7 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
                 normals.add(y)
                 normals.add(z)
             } else if (line.startsWith("vertex")) {
-                line = line.replaceFirst("vertex ".toRegex(), "").trim { it <= ' ' }
+                line = line.replaceFirst("vertex ".toRegex(), "").trim()
                 lineArr = pattern.split(line, 0)
                 val x = lineArr[0].toFloat()
                 val y = lineArr[1].toFloat()
@@ -229,21 +244,5 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
     companion object {
         private const val HEADER_SIZE = 80
         private const val ASCII_TEST_SIZE = 256
-    }
-
-    init {
-        val stream = BufferedInputStream(inputStream, INPUT_BUFFER_SIZE)
-        stream.mark(ASCII_TEST_SIZE)
-        val isText = isTextFormat(stream)
-        stream.reset()
-        if (isText) {
-            readText(stream)
-        } else {
-            readBinary(stream)
-        }
-
-        if (vertexCount <= 0 || vertexBuffer == null || normalBuffer == null) {
-            throw IOException("Invalid model.")
-        }
     }
 }
