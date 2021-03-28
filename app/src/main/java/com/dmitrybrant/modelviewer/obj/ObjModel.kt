@@ -5,7 +5,6 @@ import com.dmitrybrant.modelviewer.util.Util.calculateNormal
 import java.io.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.*
 
 /*
 *
@@ -39,15 +38,15 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
     }
 
     private fun readText(stream: InputStream) {
-        val normalBucket: MutableList<Float> = ArrayList()
-        val vertices: MutableList<Float> = ArrayList()
-        val indices: MutableList<Int> = ArrayList()
-        val normalIndices: MutableList<Int> = ArrayList()
+        val normalBucket = mutableListOf<Float>()
+        val vertices = mutableListOf<Float>()
+        val indices = mutableListOf<Int>()
+        val normalIndices = mutableListOf<Int>()
 
         val reader = BufferedReader(InputStreamReader(stream), INPUT_BUFFER_SIZE)
-        var line: String
+        var line: String?
         var lineArr: Array<String>
-        val intArr = arrayOfNulls<IntArray>(4)
+        val intArr = Array(4) { IntArray(8) }
         var index1: Int
         var index2: Int
         var index3: Int
@@ -61,13 +60,8 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         var centerMassY = 0.0
         var centerMassZ = 0.0
 
-        for (i in intArr.indices) {
-            intArr[i] = IntArray(8)
-        }
-
         while (reader.readLine().also { line = it } != null) {
-            line = line.trim { it <= ' ' }
-            lineArr = line.split("\\s+".toRegex()).toTypedArray()
+            lineArr = line!!.trim().split("\\s+".toRegex()).toTypedArray()
 
             if (lineArr.size > 3 && lineArr[0] == "v") {
                 x = lineArr[1].toFloat()
@@ -93,16 +87,16 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
                     parseInts(lineArr[1], intArr[0])
                     parseInts(lineArr[2], intArr[1])
                     parseInts(lineArr[3], intArr[2])
-                    index1 = intArr[0]!![0] - 1
-                    index2 = intArr[1]!![0] - 1
-                    index3 = intArr[2]!![0] - 1
+                    index1 = intArr[0][0] - 1
+                    index2 = intArr[1][0] - 1
+                    index3 = intArr[2][0] - 1
                     indices.add(index1)
                     indices.add(index2)
                     indices.add(index3)
-                    if (intArr[0]!![2] != -1) {
-                        normalIndices.add(intArr[0]!![2] - 1)
-                        normalIndices.add(intArr[1]!![2] - 1)
-                        normalIndices.add(intArr[2]!![2] - 1)
+                    if (intArr[0][2] != -1) {
+                        normalIndices.add(intArr[0][2] - 1)
+                        normalIndices.add(intArr[1][2] - 1)
+                        normalIndices.add(intArr[2][2] - 1)
                     } else {
                         calculateNormal(vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
                                 vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2],
@@ -121,23 +115,23 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
                     parseInts(lineArr[2], intArr[1])
                     parseInts(lineArr[3], intArr[2])
                     parseInts(lineArr[4], intArr[3])
-                    index1 = intArr[0]!![0] - 1
-                    index2 = intArr[1]!![0] - 1
-                    index3 = intArr[2]!![0] - 1
-                    index4 = intArr[3]!![0] - 1
+                    index1 = intArr[0][0] - 1
+                    index2 = intArr[1][0] - 1
+                    index3 = intArr[2][0] - 1
+                    index4 = intArr[3][0] - 1
                     indices.add(index1)
                     indices.add(index2)
                     indices.add(index3)
                     indices.add(index1)
                     indices.add(index3)
                     indices.add(index4)
-                    if (intArr[0]!![2] != -1) {
-                        normalIndices.add(intArr[0]!![2] - 1)
-                        normalIndices.add(intArr[1]!![2] - 1)
-                        normalIndices.add(intArr[2]!![2] - 1)
-                        normalIndices.add(intArr[0]!![2] - 1)
-                        normalIndices.add(intArr[2]!![2] - 1)
-                        normalIndices.add(intArr[3]!![2] - 1)
+                    if (intArr[0][2] != -1) {
+                        normalIndices.add(intArr[0][2] - 1)
+                        normalIndices.add(intArr[1][2] - 1)
+                        normalIndices.add(intArr[2][2] - 1)
+                        normalIndices.add(intArr[0][2] - 1)
+                        normalIndices.add(intArr[2][2] - 1)
+                        normalIndices.add(intArr[3][2] - 1)
                     } else {
                         calculateNormal(vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
                                 vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2],
@@ -216,11 +210,11 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         // - The integers in the string are expected to be delimited by a single non-numeric character.
         //   If a non-numeric character follows another non-numeric character, then an integer value
         //   of -1 will be added to the output array.
-        fun parseInts(str: String, ints: IntArray?) {
+        fun parseInts(str: String, ints: IntArray) {
             val len = str.length
             var intIndex = 0
             var currentInt = -1
-            ints!![0] = -1
+            ints[0] = -1
             ints[1] = -1
             ints[2] = -1
             for (i in 0 until len) {
