@@ -62,11 +62,18 @@ class MainActivity : AppCompatActivity() {
         binding.actionButton.setOnClickListener { startVrActivity() }
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.containerView)) { _: View?, insets: WindowInsetsCompat ->
-            val params = binding.actionButton.layoutParams as FrameLayout.LayoutParams
-            params.topMargin = insets.systemWindowInsetTop
-            params.bottomMargin = insets.systemWindowInsetBottom
-            params.leftMargin = insets.systemWindowInsetLeft
-            params.rightMargin = insets.systemWindowInsetRight
+            (binding.actionButton.layoutParams as FrameLayout.LayoutParams).apply {
+                topMargin = insets.systemWindowInsetTop
+                bottomMargin = insets.systemWindowInsetBottom
+                leftMargin = insets.systemWindowInsetLeft
+                rightMargin = insets.systemWindowInsetRight
+            }
+            (binding.progressBar.layoutParams as FrameLayout.LayoutParams).apply {
+                topMargin = insets.systemWindowInsetTop
+                bottomMargin = insets.systemWindowInsetBottom
+                leftMargin = insets.systemWindowInsetLeft
+                rightMargin = insets.systemWindowInsetRight
+            }
             insets.consumeSystemWindowInsets()
         }
 
