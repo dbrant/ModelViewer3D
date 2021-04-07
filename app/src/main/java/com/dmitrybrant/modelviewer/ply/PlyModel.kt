@@ -10,6 +10,7 @@ import com.dmitrybrant.modelviewer.util.Util.readIntLe
 import java.io.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.FloatBuffer
 
 /*
 *
@@ -32,6 +33,16 @@ import java.nio.ByteOrder
 */
 class PlyModel(inputStream: InputStream) : IndexedModel() {
     private val pointColor = floatArrayOf(1.0f, 1.0f, 1.0f)
+    private var colorBuffer: FloatBuffer? = null
+
+    private var xIndex = -1
+    private var yIndex = -1
+    private var zIndex = -1
+    private var rIndex = -1
+    private var gIndex = -1
+    private var bIndex = -1
+    private var alphaIndex = -1
+    private var haveColor = false
 
     init {
         val stream = BufferedInputStream(inputStream, INPUT_BUFFER_SIZE)
@@ -46,7 +57,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             GLES20.glDeleteProgram(glProgram)
             glProgram = -1
         }
-        glProgram = compileProgram(R.raw.point_cloud_vertex, R.raw.single_color_fragment, arrayOf("a_Position"))
+        glProgram = compileProgram(R.raw.point_cloud_vertex, R.raw.point_cloud_fragment, arrayOf("a_Position", "a_Color"))
         initModelMatrix(boundSize)
     }
 
@@ -62,6 +73,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
     private fun readText(stream: BufferedInputStream) {
         val vertices = mutableListOf<Float>()
+        val colors = mutableListOf<Float>()
         val reader = BufferedReader(InputStreamReader(stream), INPUT_BUFFER_SIZE)
         var line: String
         var lineArr: Array<String>
@@ -74,15 +86,26 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         */
         stream.mark(0x100000)
         var isBinary = false
+        var propIndex = 0
         while (reader.readLine().also { line = it.orEmpty() } != null) {
             line = line.trim()
+            lineArr = line.split(" ").toTypedArray()
             if (line.startsWith("format ")) {
                 if (line.contains("binary")) {
                     isBinary = true
                 }
             } else if (line.startsWith("element vertex")) {
-                lineArr = line.split(" ".toRegex()).toTypedArray()
                 vertexCount = lineArr[2].toInt()
+            } else if (line.startsWith("property ")) {
+                val propName = lineArr[lineArr.size - 1]
+                if (propName == "x" && xIndex < 0) { xIndex = propIndex }
+                else if (propName == "y" && yIndex < 0) { yIndex = propIndex }
+                else if (propName == "z" && zIndex < 0) { zIndex = propIndex }
+                else if (propName == "red" && rIndex < 0) { rIndex = propIndex }
+                else if (propName == "green" && gIndex < 0) { gIndex = propIndex }
+                else if (propName == "blue" && bIndex < 0) { bIndex = propIndex }
+                else if (propName == "alpha" && alphaIndex < 0) { alphaIndex = propIndex }
+                propIndex++
             } else if (line.startsWith("end_header")) {
                 break
             }
@@ -90,26 +113,39 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         if (vertexCount <= 0) {
             return
         }
+        if (rIndex >= 0 && gIndex >= 0 && bIndex >= 0) {
+            haveColor = true
+        }
 
         if (isBinary) {
             stream.reset()
-            readVerticesBinary(vertices, stream)
+            readVerticesBinary(vertices, colors, stream)
         } else {
-            readVerticesText(vertices, reader)
+            readVerticesText(vertices, colors, reader)
         }
 
-        val floatArray = FloatArray(vertices.size)
+        var floatArray = FloatArray(vertices.size)
         for (i in vertices.indices) {
             floatArray[i] = vertices[i]
         }
-        val vbb = ByteBuffer.allocateDirect(floatArray.size * BYTES_PER_FLOAT)
+        var vbb = ByteBuffer.allocateDirect(floatArray.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         vertexBuffer = vbb.asFloatBuffer()
         vertexBuffer!!.put(floatArray)
         vertexBuffer!!.position(0)
+
+        floatArray = FloatArray(colors.size)
+        for (i in colors.indices) {
+            floatArray[i] = colors[i]
+        }
+        vbb = ByteBuffer.allocateDirect(floatArray.size * BYTES_PER_FLOAT)
+        vbb.order(ByteOrder.nativeOrder())
+        colorBuffer = vbb.asFloatBuffer()
+        colorBuffer!!.put(floatArray)
+        colorBuffer!!.position(0)
     }
 
-    private fun readVerticesText(vertices: MutableList<Float>, reader: BufferedReader) {
+    private fun readVerticesText(vertices: MutableList<Float>, colors: MutableList<Float>, reader: BufferedReader) {
         var lineArr: Array<String>
         var x: Float
         var y: Float
@@ -119,10 +155,10 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         var centerMassZ = 0.0
 
         for (i in 0 until vertexCount) {
-            lineArr = reader.readLine().trim().split(" ".toRegex()).toTypedArray()
-            x = lineArr[0].toFloat()
-            y = lineArr[1].toFloat()
-            z = lineArr[2].toFloat()
+            lineArr = reader.readLine().trim().split(" ").toTypedArray()
+            x = lineArr[xIndex].toFloat()
+            y = lineArr[yIndex].toFloat()
+            z = lineArr[zIndex].toFloat()
             vertices.add(x)
             vertices.add(y)
             vertices.add(z)
@@ -130,13 +166,24 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             centerMassX += x.toDouble()
             centerMassY += y.toDouble()
             centerMassZ += z.toDouble()
+            if (haveColor) {
+                colors.add(lineArr[rIndex].toFloat() / 255f)
+                colors.add(lineArr[gIndex].toFloat() / 255f)
+                colors.add(lineArr[bIndex].toFloat() / 255f)
+                colors.add(if (alphaIndex >= 0) lineArr[alphaIndex].toFloat() / 255f else 1f)
+            } else {
+                colors.add(pointColor[0])
+                colors.add(pointColor[1])
+                colors.add(pointColor[2])
+                colors.add(255f)
+            }
         }
         this.centerMassX = (centerMassX / vertexCount).toFloat()
         this.centerMassY = (centerMassY / vertexCount).toFloat()
         this.centerMassZ = (centerMassZ / vertexCount).toFloat()
     }
 
-    private fun readVerticesBinary(vertices: MutableList<Float>, stream: BufferedInputStream) {
+    private fun readVerticesBinary(vertices: MutableList<Float>, colors: MutableList<Float>, stream: BufferedInputStream) {
         val tempBytes = ByteArray(0x1000)
         stream.mark(1)
         stream.read(tempBytes)
@@ -164,6 +211,12 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             centerMassX += x.toDouble()
             centerMassY += y.toDouble()
             centerMassZ += z.toDouble()
+
+            // TODO: extract color from binary format
+            colors.add(pointColor[0])
+            colors.add(pointColor[1])
+            colors.add(pointColor[2])
+            colors.add(255f)
         }
         this.centerMassX = (centerMassX / vertexCount).toFloat()
         this.centerMassY = (centerMassY / vertexCount).toFloat()
@@ -177,11 +230,13 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         GLES20.glUseProgram(glProgram)
         val mvpMatrixHandle = GLES20.glGetUniformLocation(glProgram, "u_MVP")
         val positionHandle = GLES20.glGetAttribLocation(glProgram, "a_Position")
+        val colorHandle = GLES20.glGetAttribLocation(glProgram, "a_Color")
         val pointThicknessHandle = GLES20.glGetUniformLocation(glProgram, "u_PointThickness")
         val ambientColorHandle = GLES20.glGetUniformLocation(glProgram, "u_ambientColor")
         GLES20.glEnableVertexAttribArray(positionHandle)
-        GLES20.glVertexAttribPointer(positionHandle, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false,
-                VERTEX_STRIDE, vertexBuffer)
+        GLES20.glVertexAttribPointer(positionHandle, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, VERTEX_STRIDE, vertexBuffer)
+        GLES20.glEnableVertexAttribArray(colorHandle)
+        GLES20.glVertexAttribPointer(colorHandle, 4, GLES20.GL_FLOAT, false, 4 * BYTES_PER_FLOAT, colorBuffer)
         Matrix.multiplyMM(mvMatrix, 0, viewMatrix, 0, modelMatrix, 0)
         Matrix.multiplyMM(mvpMatrix, 0, projectionMatrix, 0, mvMatrix, 0)
         GLES20.glUniformMatrix4fv(mvpMatrixHandle, 1, false, mvpMatrix, 0)
