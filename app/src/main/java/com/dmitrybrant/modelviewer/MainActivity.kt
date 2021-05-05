@@ -8,7 +8,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import android.text.TextUtils
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -192,16 +191,21 @@ class MainActivity : AppCompatActivity() {
                     cr.openInputStream(uri)
                 }
                 if (stream != null) {
-                    if (!TextUtils.isEmpty(fileName)) {
-                        model = if (fileName!!.toLowerCase(Locale.ROOT).endsWith(".stl")) {
-                            StlModel(stream)
-                        } else if (fileName.toLowerCase(Locale.ROOT).endsWith(".obj")) {
-                            ObjModel(stream)
-                        } else if (fileName.toLowerCase(Locale.ROOT).endsWith(".ply")) {
-                            PlyModel(stream)
-                        } else {
-                            // assume it's STL.
-                            StlModel(stream)
+                    if (!fileName.isNullOrEmpty()) {
+                        model = when {
+                            fileName.toLowerCase(Locale.ROOT).endsWith(".stl") -> {
+                                StlModel(stream)
+                            }
+                            fileName.toLowerCase(Locale.ROOT).endsWith(".obj") -> {
+                                ObjModel(stream)
+                            }
+                            fileName.toLowerCase(Locale.ROOT).endsWith(".ply") -> {
+                                PlyModel(stream)
+                            }
+                            else -> {
+                                // assume it's STL.
+                                StlModel(stream)
+                            }
                         }
                         model.title = fileName
                     } else {
