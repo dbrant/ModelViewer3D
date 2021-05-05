@@ -52,6 +52,8 @@ import java.util.*
 */
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
+    private lateinit var sampleModels: List<String>
+    private var sampleModelIndex = 0
     private var modelView: ModelSurfaceView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -77,6 +79,8 @@ class MainActivity : AppCompatActivity() {
             }
             insets.consumeSystemWindowInsets()
         }
+
+        sampleModels = assets.list("")!!.filter { it.endsWith(".stl") }
 
         if (intent.data != null && savedInstanceState == null) {
             beginLoadModel(intent.data!!)
@@ -260,8 +264,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadSampleModel() {
         try {
-            val stream = applicationContext.assets
-                    .open(SAMPLE_MODELS[sampleModelIndex++ % SAMPLE_MODELS.size])
+            val stream = assets.open(sampleModels[sampleModelIndex++ % sampleModels.size])
             setCurrentModel(StlModel(stream))
             stream.close()
         } catch (e: IOException) {
@@ -280,8 +283,5 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val READ_PERMISSION_REQUEST = 100
         private const val OPEN_DOCUMENT_REQUEST = 101
-
-        private val SAMPLE_MODELS = arrayOf("bunny.stl", "dragon.stl", "lucy.stl")
-        private var sampleModelIndex = 0
     }
 }
