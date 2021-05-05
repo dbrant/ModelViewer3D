@@ -27,6 +27,7 @@ import com.dmitrybrant.modelviewer.stl.StlModel
 import com.dmitrybrant.modelviewer.util.Util.closeSilently
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.core.Observable
+import io.reactivex.rxjava3.disposables.CompositeDisposable
 import io.reactivex.rxjava3.schedulers.Schedulers
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -55,6 +56,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var sampleModels: List<String>
     private var sampleModelIndex = 0
     private var modelView: ModelSurfaceView? = null
+    private val disposables = CompositeDisposable()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -103,6 +105,11 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         modelView?.onResume()
+    }
+
+    override fun onDestroy() {
+        disposables.clear()
+        super.onDestroy()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -178,7 +185,7 @@ class MainActivity : AppCompatActivity() {
     private fun beginLoadModel(uri: Uri) {
         binding.progressBar.visibility = View.VISIBLE
 
-        Observable.fromCallable {
+        disposables.add(Observable.fromCallable {
             var model: Model? = null
             var stream: InputStream? = null
             try {
@@ -232,7 +239,7 @@ class MainActivity : AppCompatActivity() {
                 }, {
                     it.printStackTrace()
                     Toast.makeText(applicationContext, getString(R.string.open_model_error, it.message), Toast.LENGTH_SHORT).show()
-                })
+                }))
     }
 
     private fun getFileName(cr: ContentResolver, uri: Uri): String? {
