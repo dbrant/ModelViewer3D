@@ -5,7 +5,6 @@ import android.content.ContentResolver
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.AsyncTask
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
@@ -27,6 +26,9 @@ import com.dmitrybrant.modelviewer.obj.ObjModel
 import com.dmitrybrant.modelviewer.ply.PlyModel
 import com.dmitrybrant.modelviewer.stl.StlModel
 import com.dmitrybrant.modelviewer.util.Util.closeSilently
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
+import io.reactivex.rxjava3.core.Observable
+import io.reactivex.rxjava3.schedulers.Schedulers
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.ByteArrayInputStream
@@ -161,11 +163,6 @@ class MainActivity : AppCompatActivity() {
         startActivityForResult(intent, OPEN_DOCUMENT_REQUEST)
     }
 
-    private fun beginLoadModel(uri: Uri) {
-        binding.progressBar.visibility = View.VISIBLE
-        ModelLoadTask().execute(uri)
-    }
-
     private fun createNewModelView(model: Model?) {
         if (modelView != null) {
             binding.containerView.removeView(modelView)
@@ -175,14 +172,15 @@ class MainActivity : AppCompatActivity() {
         binding.containerView.addView(modelView, 0)
     }
 
-    private inner class ModelLoadTask : AsyncTask<Uri?, Int?, Model?>() {
+    private fun beginLoadModel(uri: Uri) {
+        binding.progressBar.visibility = View.VISIBLE
 
-        override fun doInBackground(vararg file: Uri?): Model? {
+        Observable.fromCallable {
+            var model: Model? = null
             var stream: InputStream? = null
             try {
-                val uri = file[0]
                 val cr = applicationContext.contentResolver
-                val fileName = getFileName(cr, uri!!)
+                val fileName = getFileName(cr, uri)
                 stream = if ("http" == uri.scheme || "https" == uri.scheme) {
                     val client = OkHttpClient()
                     val request: Request = Request.Builder().url(uri.toString()).build()
@@ -194,7 +192,6 @@ class MainActivity : AppCompatActivity() {
                     cr.openInputStream(uri)
                 }
                 if (stream != null) {
-                    val model: Model
                     if (!TextUtils.isEmpty(fileName)) {
                         model = if (fileName!!.toLowerCase(Locale.ROOT).endsWith(".stl")) {
                             StlModel(stream)
@@ -212,39 +209,34 @@ class MainActivity : AppCompatActivity() {
                         // TODO: autodetect file type by reading contents?
                         model = StlModel(stream)
                     }
-                    return model
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+                model!!
             } finally {
                 closeSilently(stream)
             }
-            return null
-        }
+        }.subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .doAfterTerminate {
+                    binding.progressBar.visibility = View.GONE
+                }
+                .subscribe({
+                    setCurrentModel(it)
+                }, {
+                    it.printStackTrace()
+                    Toast.makeText(applicationContext, R.string.open_model_error, Toast.LENGTH_SHORT).show()
+                })
+    }
 
-        override fun onPostExecute(model: Model?) {
-            if (isDestroyed) {
-                return
-            }
-            if (model != null) {
-                setCurrentModel(model)
-            } else {
-                Toast.makeText(applicationContext, R.string.open_model_error, Toast.LENGTH_SHORT).show()
-                binding.progressBar.visibility = View.GONE
-            }
-        }
-
-        private fun getFileName(cr: ContentResolver, uri: Uri): String? {
-            if ("content" == uri.scheme) {
-                val projection = arrayOf(MediaStore.MediaColumns.DISPLAY_NAME)
-                ContentResolverCompat.query(cr, uri, projection, null, null, null, null)?.use { metaCursor ->
-                    if (metaCursor.moveToFirst()) {
-                        return metaCursor.getString(0)
-                    }
+    private fun getFileName(cr: ContentResolver, uri: Uri): String? {
+        if ("content" == uri.scheme) {
+            val projection = arrayOf(MediaStore.MediaColumns.DISPLAY_NAME)
+            ContentResolverCompat.query(cr, uri, projection, null, null, null, null)?.use { metaCursor ->
+                if (metaCursor.moveToFirst()) {
+                    return metaCursor.getString(0)
                 }
             }
-            return uri.lastPathSegment
         }
+        return uri.lastPathSegment
     }
 
     private fun setCurrentModel(model: Model) {
