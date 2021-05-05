@@ -223,7 +223,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         this.centerMassZ = (centerMassZ / vertexCount).toFloat()
     }
 
-    override fun draw(viewMatrix: FloatArray?, projectionMatrix: FloatArray?, light: Light) {
+    override fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray, light: Light) {
         if (vertexBuffer == null) {
             return
         }

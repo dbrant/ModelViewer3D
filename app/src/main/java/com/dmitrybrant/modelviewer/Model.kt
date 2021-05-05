@@ -61,7 +61,8 @@ abstract class Model {
         Matrix.translateM(modelMatrix, 0, -centerMassX, -centerMassY, -centerMassZ)
     }
 
-    abstract fun draw(viewMatrix: FloatArray?, projectionMatrix: FloatArray?, light: Light)
+    abstract fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray, light: Light)
+
     protected fun adjustMaxMin(x: Float, y: Float, z: Float) {
         if (x > maxX) {
             maxX = x

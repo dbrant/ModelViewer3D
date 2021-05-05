@@ -37,7 +37,7 @@ open class ArrayModel : Model() {
         super.init(boundSize)
     }
 
-    override fun draw(viewMatrix: FloatArray?, projectionMatrix: FloatArray?, light: Light) {
+    override fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray, light: Light) {
         if (vertexBuffer == null || normalBuffer == null) {
             return
         }

@@ -84,7 +84,7 @@ class Floor : ArrayModel() {
         Matrix.translateM(modelMatrix, 0, 0.0f, y, 0.0f)
     }
 
-    override fun draw(viewMatrix: FloatArray?, projectionMatrix: FloatArray?, light: Light) {
+    override fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray, light: Light) {
         if (vertexBuffer == null || normalBuffer == null) {
             return
         }
