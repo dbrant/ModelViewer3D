@@ -223,7 +223,7 @@ class MainActivity : AppCompatActivity() {
                     setCurrentModel(it)
                 }, {
                     it.printStackTrace()
-                    Toast.makeText(applicationContext, R.string.open_model_error, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(applicationContext, getString(R.string.open_model_error, it.message), Toast.LENGTH_SHORT).show()
                 })
     }
 
