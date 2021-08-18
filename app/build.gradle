@@ -50,5 +50,5 @@ dependencies {
     implementation "io.reactivex.rxjava3:rxjava:3.0.4"
     implementation "io.reactivex.rxjava3:rxandroid:3.0.0"
     implementation 'com.google.vr:sdk-base:1.190.0'
-    testImplementation 'junit:junit:4.13'
+    testImplementation 'junit:junit:4.13.2'
 }
