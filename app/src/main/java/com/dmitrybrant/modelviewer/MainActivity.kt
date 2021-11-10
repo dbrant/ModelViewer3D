@@ -66,7 +66,7 @@ class MainActivity : AppCompatActivity() {
         binding.progressBar.visibility = View.GONE
         binding.actionButton.setOnClickListener { startVrActivity() }
 
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.containerView)) { _: View?, insets: WindowInsetsCompat ->
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.containerView)) { _, insets ->
             (binding.actionButton.layoutParams as FrameLayout.LayoutParams).apply {
                 topMargin = insets.systemWindowInsetTop
                 bottomMargin = insets.systemWindowInsetBottom
@@ -204,13 +204,13 @@ class MainActivity : AppCompatActivity() {
                 if (stream != null) {
                     if (!fileName.isNullOrEmpty()) {
                         model = when {
-                            fileName.toLowerCase(Locale.ROOT).endsWith(".stl") -> {
+                            fileName.lowercase(Locale.ROOT).endsWith(".stl") -> {
                                 StlModel(stream)
                             }
-                            fileName.toLowerCase(Locale.ROOT).endsWith(".obj") -> {
+                            fileName.lowercase(Locale.ROOT).endsWith(".obj") -> {
                                 ObjModel(stream)
                             }
-                            fileName.toLowerCase(Locale.ROOT).endsWith(".ply") -> {
+                            fileName.lowercase(Locale.ROOT).endsWith(".ply") -> {
                                 PlyModel(stream)
                             }
                             else -> {
