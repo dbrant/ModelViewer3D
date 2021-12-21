@@ -53,20 +53,15 @@
                     android:host="*"
                     android:mimeType="*/*"
                     android:pathPattern=".*\\.stl"
-                    android:scheme="content" />
-                <data
-                    android:host="*"
-                    android:mimeType="*/*"
-                    android:pathPattern=".*\\.stl"
                     android:scheme="file" />
             </intent-filter>
 
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="application/stl"/>
-                <data android:mimeType="application/x-stl"/>
-                <data android:mimeType="application/octet-stream" android:scheme="content"/>
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="*/*"
+                    android:pathPattern=".*\\.stl" android:scheme="content"/>
             </intent-filter>
         </activity>
 
