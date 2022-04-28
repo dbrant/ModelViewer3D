@@ -70,11 +70,13 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
         var centerMassX = 0.0
         var centerMassY = 0.0
         var centerMassZ = 0.0
+        val facetNormalRegex = "facet normal ".toRegex()
+        val vertexRegex = "vertex ".toRegex()
 
         while (reader.readLine().also { line = it.orEmpty() } != null) {
             line = line.trim()
             if (line.startsWith("facet")) {
-                line = line.replaceFirst("facet normal ".toRegex(), "").trim()
+                line = line.replaceFirst(facetNormalRegex, "").trim()
                 lineArr = pattern.split(line, 0)
                 val x = lineArr[0].toFloat()
                 val y = lineArr[1].toFloat()
@@ -89,7 +91,7 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
                 normals.add(y)
                 normals.add(z)
             } else if (line.startsWith("vertex")) {
-                line = line.replaceFirst("vertex ".toRegex(), "").trim()
+                line = line.replaceFirst(vertexRegex, "").trim()
                 lineArr = pattern.split(line, 0)
                 val x = lineArr[0].toFloat()
                 val y = lineArr[1].toFloat()

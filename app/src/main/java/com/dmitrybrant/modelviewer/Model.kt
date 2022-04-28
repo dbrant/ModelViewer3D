@@ -27,7 +27,7 @@ abstract class Model {
     var floorOffset = 0f
         protected set
 
-    var title: String
+    var title = ""
 
     protected var glProgram = -1
 
@@ -37,12 +37,12 @@ abstract class Model {
     protected var mvMatrix = FloatArray(16)
     protected var mvpMatrix = FloatArray(16)
 
-    protected var maxX: Float
-    protected var maxY: Float
-    protected var maxZ: Float
-    protected var minX: Float
-    protected var minY: Float
-    protected var minZ: Float
+    protected var maxX = Float.MIN_VALUE
+    protected var maxY = Float.MIN_VALUE
+    protected var maxZ = Float.MIN_VALUE
+    protected var minX = Float.MAX_VALUE
+    protected var minY = Float.MAX_VALUE
+    protected var minZ = Float.MAX_VALUE
 
     open fun init(boundSize: Float) {
         initModelMatrix(boundSize)
@@ -104,15 +104,5 @@ abstract class Model {
             scale = 1f / scale
             Matrix.scaleM(modelMatrix, 0, scale, scale, scale)
         }
-    }
-
-    init {
-        maxX = Float.MIN_VALUE
-        maxY = Float.MIN_VALUE
-        maxZ = Float.MIN_VALUE
-        minX = Float.MAX_VALUE
-        minY = Float.MAX_VALUE
-        minZ = Float.MAX_VALUE
-        title = ""
     }
 }

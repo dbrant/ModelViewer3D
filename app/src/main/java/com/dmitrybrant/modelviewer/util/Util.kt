@@ -23,7 +23,6 @@ import java.io.IOException
 * limitations under the License.
 */
 object Util {
-    @JvmStatic
     fun compileProgram(@RawRes vertexShader: Int, @RawRes fragmentShader: Int, attributes: Array<String>): Int {
         val program = GLES20.glCreateProgram()
         GLES20.glAttachShader(program, loadShader(GLES20.GL_VERTEX_SHADER, readTextFileFromRawRes(vertexShader)))
@@ -35,7 +34,6 @@ object Util {
         return program
     }
 
-    @JvmStatic
     fun checkGLError(label: String) {
         var error: Int
         if (GLES20.glGetError().also { error = it } != GLES20.GL_NO_ERROR) {
@@ -43,7 +41,6 @@ object Util {
         }
     }
 
-    @JvmStatic
     fun closeSilently(c: Closeable?) {
         try {
             c?.close()
@@ -52,7 +49,6 @@ object Util {
         }
     }
 
-    @JvmStatic
     fun readIntLe(bytes: ByteArray, offset: Int): Int {
         return (bytes[offset].toInt() and 0xff) or
                 (bytes[offset + 1].toInt() and 0xff shl 8) or
@@ -60,7 +56,6 @@ object Util {
                 (bytes[offset + 3].toInt() and 0xff shl 24)
     }
 
-    @JvmStatic
     fun calculateNormal(x1: Float, y1: Float, z1: Float,
                         x2: Float, y2: Float, z2: Float,
                         x3: Float, y3: Float, z3: Float,
@@ -70,7 +65,6 @@ object Util {
         normal[2] = (x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)
     }
 
-    @JvmStatic
     fun pxToDp(px: Float): Float {
         return px / densityScalar
     }

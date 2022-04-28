@@ -176,7 +176,6 @@ class MainActivity : AppCompatActivity() {
         if (modelView != null) {
             binding.containerView.removeView(modelView)
         }
-        ModelViewerApplication.currentModel = model
         modelView = ModelSurfaceView(this, model)
         binding.containerView.addView(modelView, 0)
     }
@@ -224,6 +223,7 @@ class MainActivity : AppCompatActivity() {
                         model = StlModel(stream)
                     }
                 }
+                ModelViewerApplication.currentModel = model
                 model!!
             } finally {
                 closeSilently(stream)
