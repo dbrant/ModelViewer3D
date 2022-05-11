@@ -36,6 +36,7 @@ android {
     lint {
         abortOnError false
     }
+    namespace 'com.dmitrybrant.modelviewer'
 }
 
 dependencies {
