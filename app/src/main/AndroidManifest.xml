@@ -38,26 +38,31 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:host="*"
-                    android:mimeType="*/*"
-                    android:pathPattern=".*\\.stl"
-                    android:scheme="http" />
-                <data
-                    android:host="*"
-                    android:mimeType="*/*"
-                    android:pathPattern=".*\\.stl"
-                    android:scheme="https" />
+                <data android:host="*" android:pathPattern=".*\\.stl" android:scheme="http" />
+                <data android:host="*" android:pathPattern=".*\\.stl" android:scheme="https" />
             </intent-filter>
 
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <!-- Account for several different MIME types provided from various external apps -->
                 <data
-                    android:mimeType="*/*"
-                    android:pathPattern=".*\\.stl"
-                    android:scheme="file" />
+                    android:scheme="content"
+                    android:mimeType="application/vnd.stl"
+                    android:pathPattern=".*\\.stl" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/vnd.ms-pki.stl"
+                    android:pathPattern=".*\\.stl" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/stl"
+                    android:pathPattern=".*\\.stl" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/octet-stream"
+                    android:pathPattern=".*\\.stl" />
             </intent-filter>
 
             <intent-filter>
@@ -65,7 +70,9 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:mimeType="*/*"
-                    android:pathPattern=".*\\.stl" android:scheme="content"/>
+                    android:host="*"
+                    android:pathPattern=".*\\.stl"
+                    android:scheme="file"/>
             </intent-filter>
         </activity>
 
