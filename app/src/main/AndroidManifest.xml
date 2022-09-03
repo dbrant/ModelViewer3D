@@ -49,20 +49,13 @@
                 <!-- Account for several different MIME types provided from various external apps -->
                 <data
                     android:scheme="content"
-                    android:mimeType="application/vnd.stl"
-                    android:pathPattern=".*\\.stl" />
+                    android:mimeType="application/vnd.stl" />
                 <data
                     android:scheme="content"
-                    android:mimeType="application/vnd.ms-pki.stl"
-                    android:pathPattern=".*\\.stl" />
+                    android:mimeType="application/vnd.ms-pki.stl" />
                 <data
                     android:scheme="content"
-                    android:mimeType="application/stl"
-                    android:pathPattern=".*\\.stl" />
-                <data
-                    android:scheme="content"
-                    android:mimeType="application/octet-stream"
-                    android:pathPattern=".*\\.stl" />
+                    android:mimeType="application/stl" />
             </intent-filter>
 
             <intent-filter>
