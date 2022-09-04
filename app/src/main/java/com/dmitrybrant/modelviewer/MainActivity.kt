@@ -1,6 +1,7 @@
 package com.dmitrybrant.modelviewer
 
 import android.Manifest
+import android.app.Activity
 import android.content.ContentResolver
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -8,12 +9,12 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContentResolverCompat
@@ -37,7 +38,7 @@ import java.io.InputStream
 import java.util.*
 
 /*
-* Copyright 2017 Dmitry Brant. All rights reserved.
+* Copyright 2017-2022 Dmitry Brant. All rights reserved.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -57,6 +58,22 @@ class MainActivity : AppCompatActivity() {
     private var sampleModelIndex = 0
     private var modelView: ModelSurfaceView? = null
     private val disposables = CompositeDisposable()
+
+    private val openDocumentLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (it.resultCode == Activity.RESULT_OK && it.data?.data != null) {
+            val uri = it.data?.data
+            grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            beginLoadModel(uri!!)
+        }
+    }
+
+    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
+        if (isGranted) {
+            beginOpenModel()
+        } else {
+            Toast.makeText(this, R.string.read_permission_failed, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,8 +100,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         sampleModels = assets.list("")!!.filter { it.endsWith(".stl") }
-
-        Log.d("", ">>> " + intent.type)
 
         if (intent.data != null && savedInstanceState == null) {
             beginLoadModel(intent.data!!)
@@ -137,42 +152,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>,
-                                            grantResults: IntArray) {
-        when (requestCode) {
-            READ_PERMISSION_REQUEST -> if (grantResults.isNotEmpty()
-                    && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                beginOpenModel()
-            } else {
-                Toast.makeText(this, R.string.read_permission_failed, Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    public override fun onActivityResult(requestCode: Int, resultCode: Int, resultData: Intent?) {
-        super.onActivityResult(requestCode, resultCode, resultData)
-        if (requestCode == OPEN_DOCUMENT_REQUEST && resultCode == RESULT_OK && resultData!!.data != null) {
-            val uri = resultData.data
-            grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            beginLoadModel(uri!!)
-        }
-    }
-
     private fun checkReadPermissionThenOpen() {
         if ((ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
                         != PackageManager.PERMISSION_GRANTED)
                 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
-                    READ_PERMISSION_REQUEST)
+            requestPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
         } else {
             beginOpenModel()
         }
     }
 
     private fun beginOpenModel() {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-        intent.type = "*/*"
-        startActivityForResult(intent, OPEN_DOCUMENT_REQUEST)
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*")
+        openDocumentLauncher.launch(intent)
     }
 
     private fun createNewModelView(model: Model?) {
@@ -287,10 +279,5 @@ class MainActivity : AppCompatActivity() {
                 .setMessage(R.string.about_text)
                 .setPositiveButton(android.R.string.ok, null)
                 .show()
-    }
-
-    companion object {
-        private const val READ_PERMISSION_REQUEST = 100
-        private const val OPEN_DOCUMENT_REQUEST = 101
     }
 }
