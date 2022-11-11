@@ -1,7 +1,7 @@
 <resources>
 
     <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.MaterialComponents">
+    <style name="AppTheme" parent="Theme.Material3.Dark">
         <!-- Customize your theme here. -->
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
@@ -19,11 +19,11 @@
         <item name="android:windowTitleSize">0dp</item>
     </style>
 
-    <style name="ToolbarStyle">
+    <style name="ToolbarStyle" parent="Widget.Material3.Toolbar">
         <item name="android:background">@color/colorPrimary</item>
     </style>
 
-    <style name="PopupMenuStyle" parent="Widget.AppCompat.Light.PopupMenu">
+    <style name="PopupMenuStyle" parent="Widget.Material3.PopupMenu">
         <item name="overlapAnchor">true</item>
     </style>
 
