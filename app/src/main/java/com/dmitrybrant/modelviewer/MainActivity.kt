@@ -67,7 +67,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
+    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) {
             beginOpenModel()
         } else {
