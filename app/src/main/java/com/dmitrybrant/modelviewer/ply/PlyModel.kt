@@ -5,13 +5,14 @@ import android.opengl.Matrix
 import com.dmitrybrant.modelviewer.IndexedModel
 import com.dmitrybrant.modelviewer.Light
 import com.dmitrybrant.modelviewer.R
+import com.dmitrybrant.modelviewer.obj.ObjModel
+import com.dmitrybrant.modelviewer.util.Util
 import com.dmitrybrant.modelviewer.util.Util.compileProgram
 import com.dmitrybrant.modelviewer.util.Util.readIntLe
 import com.dmitrybrant.modelviewer.util.Util.readLongLe
 import java.io.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.nio.FloatBuffer
 
 /*
 *
@@ -33,8 +34,8 @@ import java.nio.FloatBuffer
 * limitations under the License.
 */
 class PlyModel(inputStream: InputStream) : IndexedModel() {
-    private val pointColor = floatArrayOf(1.0f, 1.0f, 1.0f)
-    private var colorBuffer: FloatBuffer? = null
+    private val pointColor = floatArrayOf(1.0f, 1.0f, 1.0f, 1.0f)
+    private var isPointCloud = false
 
     init {
         val stream = BufferedInputStream(inputStream, INPUT_BUFFER_SIZE)
@@ -45,11 +46,15 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
     }
 
     override fun init(boundSize: Float) {
-        if (GLES20.glIsProgram(glProgram)) {
-            GLES20.glDeleteProgram(glProgram)
-            glProgram = -1
+        if (isPointCloud) {
+            if (GLES20.glIsProgram(glProgram)) {
+                GLES20.glDeleteProgram(glProgram)
+                glProgram = -1
+            }
+            glProgram = compileProgram(R.raw.point_cloud_vertex, R.raw.point_cloud_fragment, arrayOf("a_Position", "a_Color"))
+        } else {
+            super.init(boundSize)
         }
-        glProgram = compileProgram(R.raw.point_cloud_vertex, R.raw.point_cloud_fragment, arrayOf("a_Position", "a_Color"))
         initModelMatrix(boundSize)
     }
 
@@ -66,6 +71,9 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
     private fun readText(stream: BufferedInputStream) {
         val elements = mutableMapOf<String, List<Pair<String, String>>>()
         val elementCounts = mutableMapOf<String, Int>()
+        val indices = mutableListOf<Int>()
+        val normalBucket = mutableListOf<Float>()
+        val normalIndices = mutableListOf<Int>()
 
         val vertices = mutableListOf<Float>()
         val colors = mutableListOf<Float>()
@@ -105,7 +113,6 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         }
 
         vertexCount = elementCounts["vertex"] ?: 0
-
         if (vertexCount <= 0) {
             throw IOException("No vertices found in model.")
         }
@@ -117,87 +124,158 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             readVerticesText(vertices, colors, elements["vertex"]!!, reader)
         }
 
-        var floatArray = FloatArray(vertices.size)
-        for (i in vertices.indices) {
-            floatArray[i] = vertices[i]
-        }
-        var vbb = ByteBuffer.allocateDirect(floatArray.size * BYTES_PER_FLOAT)
-        vbb.order(ByteOrder.nativeOrder())
-        vertexBuffer = vbb.asFloatBuffer()
-        vertexBuffer!!.put(floatArray)
-        vertexBuffer!!.position(0)
+        val faceCount = elementCounts["face"] ?: 0
+        isPointCloud = faceCount == 0
 
-        floatArray = FloatArray(colors.size)
-        for (i in colors.indices) {
-            floatArray[i] = colors[i]
-        }
-        vbb = ByteBuffer.allocateDirect(floatArray.size * BYTES_PER_FLOAT)
-        vbb.order(ByteOrder.nativeOrder())
-        colorBuffer = vbb.asFloatBuffer()
-        colorBuffer!!.put(floatArray)
-        colorBuffer!!.position(0)
-    }
-
-    private fun readVerticesText(vertices: MutableList<Float>, colors: MutableList<Float>,
-                                 vertexElement: List<Pair<String, String>>, reader: BufferedReader) {
-        var lineArr: Array<String>
-        var x: Float
-        var y: Float
-        var z: Float
-        var centerMassX = 0.0
-        var centerMassY = 0.0
-        var centerMassZ = 0.0
-
-        var xIndex = -1
-        var yIndex = -1
-        var zIndex = -1
-        var rIndex = -1
-        var gIndex = -1
-        var bIndex = -1
-        var alphaIndex = -1
-        var haveColor = false
-
-        for (i in vertexElement.indices) {
-            if (vertexElement[i].second == "x" && xIndex < 0) { xIndex = i }
-            else if (vertexElement[i].second == "y" && yIndex < 0) { yIndex = i }
-            else if (vertexElement[i].second == "z" && zIndex < 0) { zIndex = i }
-            else if (vertexElement[i].second == "red" && rIndex < 0) { rIndex = i }
-            else if (vertexElement[i].second == "green" && gIndex < 0) { gIndex = i }
-            else if (vertexElement[i].second == "blue" && bIndex < 0) { bIndex = i }
-            else if (vertexElement[i].second == "alpha" && alphaIndex < 0) { alphaIndex = i }
-        }
-
-        if (rIndex >= 0 && gIndex >= 0 && bIndex >= 0) {
-            haveColor = true
-        }
-
-        for (i in 0 until vertexCount) {
-            lineArr = reader.readLine().trim().split(" ").toTypedArray()
-            x = lineArr[xIndex].toFloat()
-            y = lineArr[yIndex].toFloat()
-            z = lineArr[zIndex].toFloat()
-            vertices.add(x)
-            vertices.add(y)
-            vertices.add(z)
-            adjustMaxMin(x, y, z)
-            centerMassX += x.toDouble()
-            centerMassY += y.toDouble()
-            centerMassZ += z.toDouble()
-            if (haveColor) {
-                colors.add(lineArr[rIndex].toFloat() / 255f)
-                colors.add(lineArr[gIndex].toFloat() / 255f)
-                colors.add(lineArr[bIndex].toFloat() / 255f)
-                colors.add(if (alphaIndex >= 0) lineArr[alphaIndex].toFloat() / 255f else 1f)
+        if (faceCount > 0) {
+            if (isBinary) {
+                readFacesBinary(faceCount, indices, vertices, normalBucket, normalIndices,
+                    elements["face"]!!, stream)
             } else {
-                colors.add(pointColor[0])
-                colors.add(pointColor[1])
-                colors.add(pointColor[2])
-                colors.add(255f)
+                readFacesText(faceCount, indices, vertices, normalBucket, normalIndices,
+                    elements["face"]!!, reader)
             }
         }
-        this.centerMassX = (centerMassX / vertexCount).toFloat()
-        this.centerMassY = (centerMassY / vertexCount).toFloat()
-        this.centerMassZ = (centerMassZ / vertexCount).toFloat()
+
+        var vbb = ByteBuffer.allocateDirect(vertices.size * BYTES_PER_FLOAT)
+        vbb.order(ByteOrder.nativeOrder())
+        vertexBuffer = vbb.asFloatBuffer()
+        for (i in vertices.indices) {
+            vertexBuffer!!.put(vertices[i])
+        }
+        vertexBuffer!!.position(0)
+
+        if (faceCount > 0) {
+            indexCount = indices.size
+            vbb = ByteBuffer.allocateDirect(indexCount * BYTES_PER_INT)
+            vbb.order(ByteOrder.nativeOrder())
+            indexBuffer = vbb.asIntBuffer()
+            for (i in 0 until indexCount) {
+                indexBuffer!!.put(indices[i])
+            }
+            indexBuffer!!.position(0)
+
+            val normalArray = FloatArray(vertices.size)
+            var vi: Int
+            var ni: Int
+            for (i in 0 until indexCount) {
+                vi = indices[i]
+                ni = normalIndices[i]
+                normalArray[vi * 3] = normalBucket[ni * 3]
+                normalArray[vi * 3 + 1] = normalBucket[ni * 3 + 1]
+                normalArray[vi * 3 + 2] = normalBucket[ni * 3 + 2]
+            }
+            vbb = ByteBuffer.allocateDirect(normalArray.size * BYTES_PER_FLOAT)
+            vbb.order(ByteOrder.nativeOrder())
+            normalBuffer = vbb.asFloatBuffer()
+            normalBuffer!!.put(normalArray)
+            normalBuffer!!.position(0)
+        }
+
+        if (colors.isNotEmpty()) {
+            vbb = ByteBuffer.allocateDirect(colors.size * BYTES_PER_FLOAT)
+            vbb.order(ByteOrder.nativeOrder())
+            colorBuffer = vbb.asFloatBuffer()
+            for (i in colors.indices) {
+                colorBuffer!!.put(colors[i])
+            }
+            colorBuffer!!.position(0)
+        }
+    }
+
+    private fun readFacesText(faceCount: Int, indices: MutableList<Int>, vertices: List<Float>,
+                              normalBucket: MutableList<Float>, normalIndices: MutableList<Int>,
+                              facesElement: List<Pair<String, String>>, reader: BufferedReader) {
+        var index1 = 0
+        var index2 = 0
+        var index3 = 0
+        var index4 = 0
+        val intArr = IntArray(8)
+        val customNormal = FloatArray(3)
+
+        for (i in 0 until faceCount) {
+            ObjModel.parseInts(reader.readLine().trim(), intArr)
+
+            if (intArr[0] == 3) {
+                // triangle
+                index1 = intArr[1]
+                index2 = intArr[2]
+                index3 = intArr[3]
+                indices.add(index1)
+                indices.add(index2)
+                indices.add(index3)
+
+                Util.calculateNormal(
+                    vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
+                    vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2],
+                    vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
+                    customNormal
+                )
+                normalBucket.add(customNormal[0])
+                normalBucket.add(customNormal[1])
+                normalBucket.add(customNormal[2])
+                normalIndices.add((normalBucket.size - 1) / 3)
+                normalIndices.add((normalBucket.size - 1) / 3)
+                normalIndices.add((normalBucket.size - 1) / 3)
+            } else if (intArr[0] == 4) {
+                // quad
+                // TODO
+
+            } else {
+                // unsupported, so fall back to point cloud.
+                isPointCloud = true
+                return
+            }
+        }
+    }
+
+    // TODO: The binary format of faces is currently assumed to be "uchar int"
+    // Are there other types?
+    private fun readFacesBinary(faceCount: Int, indices: MutableList<Int>, vertices: List<Float>,
+                                normalBucket: MutableList<Float>, normalIndices: MutableList<Int>,
+                                facesElement: List<Pair<String, String>>, stream: BufferedInputStream) {
+        val tempBytes = ByteArray(0x1000)
+        var index1 = 0
+        var index2 = 0
+        var index3 = 0
+        var index4 = 0
+        val customNormal = FloatArray(3)
+
+        for (i in 0 until faceCount) {
+            stream.read(tempBytes, 0, 1)
+
+            if (tempBytes[0].toInt() == 3) {
+                // triangle
+                stream.read(tempBytes, 0, 3 * BYTES_PER_INT)
+                index1 = readIntLe(tempBytes, 0)
+                index2 = readIntLe(tempBytes, 4)
+                index3 = readIntLe(tempBytes, 8)
+                indices.add(index1)
+                indices.add(index2)
+                indices.add(index3)
+
+                Util.calculateNormal(
+                    vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
+                    vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2],
+                    vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
+                    customNormal
+                )
+                normalBucket.add(customNormal[0])
+                normalBucket.add(customNormal[1])
+                normalBucket.add(customNormal[2])
+                normalIndices.add((normalBucket.size - 1) / 3)
+                normalIndices.add((normalBucket.size - 1) / 3)
+                normalIndices.add((normalBucket.size - 1) / 3)
+            } else if (tempBytes[0].toInt() == 4) {
+                // quad
+                // TODO
+
+            } else {
+                // unsupported, so fall back to point cloud.
+                isPointCloud = true
+                return
+            }
+        }
     }
 
     private fun readVerticesBinary(vertices: MutableList<Float>, colors: MutableList<Float>,
@@ -281,11 +359,63 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
                 } else {
                     colors.add(255f)
                 }
-            } else {
-                colors.add(pointColor[0])
-                colors.add(pointColor[1])
-                colors.add(pointColor[2])
-                colors.add(255f)
+            }
+        }
+        this.centerMassX = (centerMassX / vertexCount).toFloat()
+        this.centerMassY = (centerMassY / vertexCount).toFloat()
+        this.centerMassZ = (centerMassZ / vertexCount).toFloat()
+    }
+
+    private fun readVerticesText(vertices: MutableList<Float>, colors: MutableList<Float>,
+                                 vertexElement: List<Pair<String, String>>, reader: BufferedReader) {
+        var lineArr: Array<String>
+        var x: Float
+        var y: Float
+        var z: Float
+        var centerMassX = 0.0
+        var centerMassY = 0.0
+        var centerMassZ = 0.0
+
+        var xIndex = -1
+        var yIndex = -1
+        var zIndex = -1
+        var rIndex = -1
+        var gIndex = -1
+        var bIndex = -1
+        var alphaIndex = -1
+        var haveColor = false
+
+        for (i in vertexElement.indices) {
+            if (vertexElement[i].second == "x" && xIndex < 0) { xIndex = i }
+            else if (vertexElement[i].second == "y" && yIndex < 0) { yIndex = i }
+            else if (vertexElement[i].second == "z" && zIndex < 0) { zIndex = i }
+            else if (vertexElement[i].second == "red" && rIndex < 0) { rIndex = i }
+            else if (vertexElement[i].second == "green" && gIndex < 0) { gIndex = i }
+            else if (vertexElement[i].second == "blue" && bIndex < 0) { bIndex = i }
+            else if (vertexElement[i].second == "alpha" && alphaIndex < 0) { alphaIndex = i }
+        }
+
+        if (rIndex >= 0 && gIndex >= 0 && bIndex >= 0) {
+            haveColor = true
+        }
+
+        for (i in 0 until vertexCount) {
+            lineArr = reader.readLine().trim().split(" ").toTypedArray()
+            x = lineArr[xIndex].toFloat()
+            y = lineArr[yIndex].toFloat()
+            z = lineArr[zIndex].toFloat()
+            vertices.add(x)
+            vertices.add(y)
+            vertices.add(z)
+            adjustMaxMin(x, y, z)
+            centerMassX += x.toDouble()
+            centerMassY += y.toDouble()
+            centerMassZ += z.toDouble()
+            if (haveColor) {
+                colors.add(lineArr[rIndex].toFloat() / 255f)
+                colors.add(lineArr[gIndex].toFloat() / 255f)
+                colors.add(lineArr[bIndex].toFloat() / 255f)
+                colors.add(if (alphaIndex >= 0) lineArr[alphaIndex].toFloat() / 255f else 1f)
             }
         }
         this.centerMassX = (centerMassX / vertexCount).toFloat()
@@ -294,6 +424,10 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
     }
 
     override fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray, light: Light) {
+        if (!isPointCloud) {
+            super.draw(viewMatrix, projectionMatrix, light)
+            return
+        }
         if (vertexBuffer == null) {
             return
         }
@@ -311,7 +445,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         Matrix.multiplyMM(mvpMatrix, 0, projectionMatrix, 0, mvMatrix, 0)
         GLES20.glUniformMatrix4fv(mvpMatrixHandle, 1, false, mvpMatrix, 0)
         GLES20.glUniform1f(pointThicknessHandle, 3.0f)
-        GLES20.glUniform3fv(ambientColorHandle, 1, pointColor, 0)
+        GLES20.glUniform4fv(ambientColorHandle, 1, pointColor, 0)
         GLES20.glDrawArrays(GLES20.GL_POINTS, 0, vertexCount)
         GLES20.glDisableVertexAttribArray(positionHandle)
     }
