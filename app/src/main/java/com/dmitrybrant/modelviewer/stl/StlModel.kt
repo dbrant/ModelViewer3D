@@ -111,24 +111,20 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
         this.centerMassY = (centerMassY / vertexCount).toFloat()
         this.centerMassZ = (centerMassZ / vertexCount).toFloat()
 
-        var floatArray = FloatArray(vertices.size)
-        for (i in vertices.indices) {
-            floatArray[i] = vertices[i]
-        }
-        var vbb = ByteBuffer.allocateDirect(floatArray.size * BYTES_PER_FLOAT)
+        var vbb = ByteBuffer.allocateDirect(vertices.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         vertexBuffer = vbb.asFloatBuffer()
-        vertexBuffer!!.put(floatArray)
-        vertexBuffer!!.position(0)
-        floatArray = FloatArray(normals.size)
-        for (i in normals.indices) {
-            floatArray[i] = normals[i]
+        for (i in vertices.indices) {
+            vertexBuffer!!.put(vertices[i])
         }
+        vertexBuffer!!.position(0)
 
-        vbb = ByteBuffer.allocateDirect(floatArray.size * BYTES_PER_FLOAT)
+        vbb = ByteBuffer.allocateDirect(normals.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         normalBuffer = vbb.asFloatBuffer()
-        normalBuffer!!.put(floatArray)
+        for (i in normals.indices) {
+            normalBuffer!!.put(normals[i])
+        }
         normalBuffer!!.position(0)
     }
 
