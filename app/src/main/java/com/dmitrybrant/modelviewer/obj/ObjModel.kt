@@ -53,7 +53,7 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
 
         val reader = BufferedReader(InputStreamReader(stream), INPUT_BUFFER_SIZE)
         var line: String
-        var lineArr: Array<String>
+        var lineArr: List<String>
         val intArr = Array(4) { IntArray(8) }
         var index1: Int
         var index2: Int
@@ -69,7 +69,7 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         var centerMassZ = 0.0
 
         while (reader.readLine().also { line = it.orEmpty() } != null) {
-            lineArr = line.trim().split("\\s+".toRegex()).toTypedArray()
+            lineArr = line.trim().split("\\s+".toRegex())
 
             if (lineArr.size > 3 && lineArr[0] == "v") {
                 x = lineArr[1].toFloat()
