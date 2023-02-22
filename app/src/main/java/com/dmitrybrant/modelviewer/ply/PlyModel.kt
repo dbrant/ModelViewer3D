@@ -372,7 +372,6 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         var gOffset = -1
         var bOffset = -1
         var alphaOffset = -1
-        var haveColor = false
 
         // TODO: This just assumes that all three components x,y,z are the same type (float or double)
         // Can there be cases when each component is a different type?
@@ -394,7 +393,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         }
 
         if (rOffset >= 0 && gOffset >= 0 && bOffset >= 0) {
-            haveColor = true
+            useColorBuffer = true
         }
 
         for (i in 0 until vertexCount) {
@@ -418,7 +417,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             centerMassY += y.toDouble()
             centerMassZ += z.toDouble()
 
-            if (haveColor) {
+            if (useColorBuffer) {
                 colors.add(tempBytes[rOffset].toInt().toFloat() / 255f)
                 colors.add(tempBytes[rOffset].toInt().toFloat() / 255f)
                 colors.add(tempBytes[rOffset].toInt().toFloat() / 255f)
@@ -427,6 +426,11 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
                 } else {
                     colors.add(255f)
                 }
+            } else {
+                colors.add(pointColor[0])
+                colors.add(pointColor[1])
+                colors.add(pointColor[2])
+                colors.add(pointColor[3])
             }
         }
         this.centerMassX = (centerMassX / vertexCount).toFloat()
@@ -451,7 +455,6 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         var gIndex = -1
         var bIndex = -1
         var alphaIndex = -1
-        var haveColor = false
 
         for (i in vertexElement.indices) {
             if (vertexElement[i].second == "x" && xIndex < 0) { xIndex = i }
@@ -464,7 +467,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         }
 
         if (rIndex >= 0 && gIndex >= 0 && bIndex >= 0) {
-            haveColor = true
+            useColorBuffer = true
         }
 
         for (i in 0 until vertexCount) {
@@ -479,11 +482,16 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             centerMassX += x.toDouble()
             centerMassY += y.toDouble()
             centerMassZ += z.toDouble()
-            if (haveColor) {
+            if (useColorBuffer) {
                 colors.add(lineArr[rIndex].toFloat() / 255f)
                 colors.add(lineArr[gIndex].toFloat() / 255f)
                 colors.add(lineArr[bIndex].toFloat() / 255f)
                 colors.add(if (alphaIndex >= 0) lineArr[alphaIndex].toFloat() / 255f else 1f)
+            } else {
+                colors.add(pointColor[0])
+                colors.add(pointColor[1])
+                colors.add(pointColor[2])
+                colors.add(pointColor[3])
             }
         }
         this.centerMassX = (centerMassX / vertexCount).toFloat()

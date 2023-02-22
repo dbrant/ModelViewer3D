@@ -28,16 +28,17 @@ open class ArrayModel : Model() {
     protected var vertexBuffer: FloatBuffer? = null
     protected var normalBuffer: FloatBuffer? = null
     protected var colorBuffer: FloatBuffer? = null
+    protected var useColorBuffer = false
 
     override fun init(boundSize: Float) {
         if (GLES20.glIsProgram(glProgram)) {
             GLES20.glDeleteProgram(glProgram)
             glProgram = -1
         }
-        if (colorBuffer == null) {
-            glProgram = compileProgram(R.raw.model_vertex, R.raw.single_light_fragment, arrayOf("a_Position", "a_Normal"))
-        } else {
+        if (useColorBuffer) {
             glProgram = compileProgram(R.raw.model_vertex_color, R.raw.model_fragment_color, arrayOf("a_Position", "a_Normal", "a_Color"))
+        } else {
+            glProgram = compileProgram(R.raw.model_vertex, R.raw.single_light_fragment, arrayOf("a_Position", "a_Normal"))
         }
         super.init(boundSize)
     }
