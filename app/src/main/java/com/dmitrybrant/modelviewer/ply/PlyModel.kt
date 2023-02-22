@@ -18,7 +18,7 @@ import java.nio.FloatBuffer
 * Info on the PLY format: https://en.wikipedia.org/wiki/PLY_(file_format)
 * Please see limitations in inline comments.
 *
-* Copyright 2017 Dmitry Brant. All rights reserved.
+* Copyright 2017- Dmitry Brant. All rights reserved.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -75,9 +75,8 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
         /*
         TODO:
-        This is currently pretty limited. We expect the header to contain a line of
-        "element vertex nnn", and the list of vertices to follow immediately after the
-        header, and each vertex to have the format "x, y, z, ...".
+        At the moment we only parse "vertex" elements, and render them as points.
+        (we do not parse "face" elements that tie together vertices)
         */
         stream.mark(0x100000)
         var isBinary = false
@@ -99,10 +98,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             } else if (line.startsWith("property ")) {
                 val propType = lineArr[1] // TODO: should be all words until n-1
                 val propName = lineArr[lineArr.size - 1]
-
                 currentElement?.add(Pair(propType, propName))
-
-
             } else if (line.startsWith("end_header")) {
                 break
             }
