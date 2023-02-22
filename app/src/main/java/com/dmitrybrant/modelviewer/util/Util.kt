@@ -56,6 +56,17 @@ object Util {
                 (bytes[offset + 3].toInt() and 0xff shl 24)
     }
 
+    fun readLongLe(bytes: ByteArray, offset: Int): Long {
+        return (bytes[offset].toLong() and 0xff) or
+                (bytes[offset + 1].toLong() and 0xff shl 8) or
+                (bytes[offset + 2].toLong() and 0xff shl 16) or
+                (bytes[offset + 3].toLong() and 0xff shl 24) or
+                (bytes[offset + 4].toLong() and 0xff shl 32) or
+                (bytes[offset + 5].toLong() and 0xff shl 40) or
+                (bytes[offset + 6].toLong() and 0xff shl 48) or
+                (bytes[offset + 7].toLong() and 0xff shl 56)
+    }
+
     fun calculateNormal(x1: Float, y1: Float, z1: Float,
                         x2: Float, y2: Float, z2: Float,
                         x3: Float, y3: Float, z3: Float,

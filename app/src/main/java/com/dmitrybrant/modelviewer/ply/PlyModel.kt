@@ -7,6 +7,7 @@ import com.dmitrybrant.modelviewer.Light
 import com.dmitrybrant.modelviewer.R
 import com.dmitrybrant.modelviewer.util.Util.compileProgram
 import com.dmitrybrant.modelviewer.util.Util.readIntLe
+import com.dmitrybrant.modelviewer.util.Util.readLongLe
 import java.io.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -34,15 +35,6 @@ import java.nio.FloatBuffer
 class PlyModel(inputStream: InputStream) : IndexedModel() {
     private val pointColor = floatArrayOf(1.0f, 1.0f, 1.0f)
     private var colorBuffer: FloatBuffer? = null
-
-    private var xIndex = -1
-    private var yIndex = -1
-    private var zIndex = -1
-    private var rIndex = -1
-    private var gIndex = -1
-    private var bIndex = -1
-    private var alphaIndex = -1
-    private var haveColor = false
 
     init {
         val stream = BufferedInputStream(inputStream, INPUT_BUFFER_SIZE)
@@ -72,8 +64,9 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
     }
 
     private fun readText(stream: BufferedInputStream) {
-        val elements = mutableMapOf<String, List<String>>()
+        val elements = mutableMapOf<String, List<Pair<String, String>>>()
         val elementCounts = mutableMapOf<String, Int>()
+
         val vertices = mutableListOf<Float>()
         val colors = mutableListOf<Float>()
         val reader = BufferedReader(InputStreamReader(stream), INPUT_BUFFER_SIZE)
@@ -88,9 +81,8 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         */
         stream.mark(0x100000)
         var isBinary = false
-        var propIndex = 0
 
-        var currentElement: List<String>? = null
+        var currentElement: MutableList<Pair<String, String>>? = null
 
         while (reader.readLine().also { line = it.orEmpty() } != null) {
             line = line.trim()
@@ -104,17 +96,13 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
                 currentElement = mutableListOf()
                 elements[elementName] = currentElement
                 elementCounts[elementName] = lineArr[2].toInt()
-                vertexCount = lineArr[2].toInt()
             } else if (line.startsWith("property ")) {
+                val propType = lineArr[1] // TODO: should be all words until n-1
                 val propName = lineArr[lineArr.size - 1]
-                if (propName == "x" && xIndex < 0) { xIndex = propIndex }
-                else if (propName == "y" && yIndex < 0) { yIndex = propIndex }
-                else if (propName == "z" && zIndex < 0) { zIndex = propIndex }
-                else if (propName == "red" && rIndex < 0) { rIndex = propIndex }
-                else if (propName == "green" && gIndex < 0) { gIndex = propIndex }
-                else if (propName == "blue" && bIndex < 0) { bIndex = propIndex }
-                else if (propName == "alpha" && alphaIndex < 0) { alphaIndex = propIndex }
-                propIndex++
+
+                currentElement?.add(Pair(propType, propName))
+
+
             } else if (line.startsWith("end_header")) {
                 break
             }
@@ -125,15 +113,12 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         if (vertexCount <= 0) {
             throw IOException("No vertices found in model.")
         }
-        if (rIndex >= 0 && gIndex >= 0 && bIndex >= 0) {
-            haveColor = true
-        }
 
         if (isBinary) {
             stream.reset()
-            readVerticesBinary(vertices, colors, stream)
+            readVerticesBinary(vertices, colors, elements["vertex"]!!, stream)
         } else {
-            readVerticesText(vertices, colors, reader)
+            readVerticesText(vertices, colors, elements["vertex"]!!, reader)
         }
 
         var floatArray = FloatArray(vertices.size)
@@ -157,7 +142,8 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         colorBuffer!!.position(0)
     }
 
-    private fun readVerticesText(vertices: MutableList<Float>, colors: MutableList<Float>, reader: BufferedReader) {
+    private fun readVerticesText(vertices: MutableList<Float>, colors: MutableList<Float>,
+                                 vertexElement: List<Pair<String, String>>, reader: BufferedReader) {
         var lineArr: Array<String>
         var x: Float
         var y: Float
@@ -165,6 +151,29 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         var centerMassX = 0.0
         var centerMassY = 0.0
         var centerMassZ = 0.0
+
+        var xIndex = -1
+        var yIndex = -1
+        var zIndex = -1
+        var rIndex = -1
+        var gIndex = -1
+        var bIndex = -1
+        var alphaIndex = -1
+        var haveColor = false
+
+        for (i in vertexElement.indices) {
+            if (vertexElement[i].second == "x" && xIndex < 0) { xIndex = i }
+            else if (vertexElement[i].second == "y" && yIndex < 0) { yIndex = i }
+            else if (vertexElement[i].second == "z" && zIndex < 0) { zIndex = i }
+            else if (vertexElement[i].second == "red" && rIndex < 0) { rIndex = i }
+            else if (vertexElement[i].second == "green" && gIndex < 0) { gIndex = i }
+            else if (vertexElement[i].second == "blue" && bIndex < 0) { bIndex = i }
+            else if (vertexElement[i].second == "alpha" && alphaIndex < 0) { alphaIndex = i }
+        }
+
+        if (rIndex >= 0 && gIndex >= 0 && bIndex >= 0) {
+            haveColor = true
+        }
 
         for (i in 0 until vertexCount) {
             lineArr = reader.readLine().trim().split(" ").toTypedArray()
@@ -195,7 +204,8 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         this.centerMassZ = (centerMassZ / vertexCount).toFloat()
     }
 
-    private fun readVerticesBinary(vertices: MutableList<Float>, colors: MutableList<Float>, stream: BufferedInputStream) {
+    private fun readVerticesBinary(vertices: MutableList<Float>, colors: MutableList<Float>,
+                                   vertexElement: List<Pair<String, String>>, stream: BufferedInputStream) {
         val tempBytes = ByteArray(0x1000)
         stream.mark(1)
         stream.read(tempBytes)
@@ -211,11 +221,53 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         var centerMassY = 0.0
         var centerMassZ = 0.0
 
+        var elementByteLength = 0
+
+        var xOffset = -1
+        var yOffset = -1
+        var zOffset = -1
+        var rOffset = -1
+        var gOffset = -1
+        var bOffset = -1
+        var alphaOffset = -1
+        var haveColor = false
+
+        // TODO: This just assumes that all three components x,y,z are the same type (float or double)
+        // Can there be cases when each component is a different type?
+        var areVerticesDouble = false
+
+        for (i in vertexElement.indices) {
+            val length = typeToSize(vertexElement[i].first)
+            if (vertexElement[i].second == "x" && xOffset < 0) {
+                xOffset = elementByteLength
+                if (vertexElement[i].first == "double") { areVerticesDouble = true }
+            }
+            else if (vertexElement[i].second == "y" && yOffset < 0) { yOffset = elementByteLength }
+            else if (vertexElement[i].second == "z" && zOffset < 0) { zOffset = elementByteLength }
+            else if (vertexElement[i].second == "red" && rOffset < 0) { rOffset = elementByteLength }
+            else if (vertexElement[i].second == "green" && gOffset < 0) { gOffset = elementByteLength }
+            else if (vertexElement[i].second == "blue" && bOffset < 0) { bOffset = elementByteLength }
+            else if (vertexElement[i].second == "alpha" && alphaOffset < 0) { alphaOffset = elementByteLength }
+            elementByteLength += length
+        }
+
+        if (rOffset >= 0 && gOffset >= 0 && bOffset >= 0) {
+            haveColor = true
+        }
+
         for (i in 0 until vertexCount) {
-            stream.read(tempBytes, 0, BYTES_PER_FLOAT * 3)
-            x = java.lang.Float.intBitsToFloat(readIntLe(tempBytes, 0))
-            y = java.lang.Float.intBitsToFloat(readIntLe(tempBytes, BYTES_PER_FLOAT))
-            z = java.lang.Float.intBitsToFloat(readIntLe(tempBytes, BYTES_PER_FLOAT * 2))
+            stream.read(tempBytes, 0, elementByteLength)
+
+            if (areVerticesDouble) {
+                x = java.lang.Double.longBitsToDouble(readLongLe(tempBytes, xOffset)).toFloat()
+                y = java.lang.Double.longBitsToDouble(readLongLe(tempBytes, yOffset)).toFloat()
+                z = java.lang.Double.longBitsToDouble(readLongLe(tempBytes, zOffset)).toFloat()
+            } else {
+                x = java.lang.Float.intBitsToFloat(readIntLe(tempBytes, xOffset))
+                y = java.lang.Float.intBitsToFloat(readIntLe(tempBytes, yOffset))
+                z = java.lang.Float.intBitsToFloat(readIntLe(tempBytes, zOffset))
+            }
+
             vertices.add(x)
             vertices.add(y)
             vertices.add(z)
@@ -224,11 +276,21 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             centerMassY += y.toDouble()
             centerMassZ += z.toDouble()
 
-            // TODO: extract color from binary format
-            colors.add(pointColor[0])
-            colors.add(pointColor[1])
-            colors.add(pointColor[2])
-            colors.add(255f)
+            if (haveColor) {
+                colors.add(tempBytes[rOffset].toInt().toFloat() / 255f)
+                colors.add(tempBytes[rOffset].toInt().toFloat() / 255f)
+                colors.add(tempBytes[rOffset].toInt().toFloat() / 255f)
+                if (alphaOffset >= 0) {
+                    colors.add(tempBytes[alphaOffset].toInt().toFloat() / 255f)
+                } else {
+                    colors.add(255f)
+                }
+            } else {
+                colors.add(pointColor[0])
+                colors.add(pointColor[1])
+                colors.add(pointColor[2])
+                colors.add(255f)
+            }
         }
         this.centerMassX = (centerMassX / vertexCount).toFloat()
         this.centerMassY = (centerMassY / vertexCount).toFloat()
@@ -256,5 +318,21 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         GLES20.glUniform3fv(ambientColorHandle, 1, pointColor, 0)
         GLES20.glDrawArrays(GLES20.GL_POINTS, 0, vertexCount)
         GLES20.glDisableVertexAttribArray(positionHandle)
+    }
+
+    private fun typeToSize(typeStr: String): Int {
+        return when (typeStr) {
+            "char" -> 1
+            "uchar" -> 1
+            "short" -> 2
+            "ushort" -> 2
+            "int" -> 4
+            "uint" -> 4
+            "long" -> 8
+            "ulong" -> 8
+            "float" -> 4
+            "double" -> 8
+            else -> 0
+        }
     }
 }
