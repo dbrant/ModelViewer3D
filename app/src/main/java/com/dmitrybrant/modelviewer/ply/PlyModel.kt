@@ -79,7 +79,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         val colors = mutableListOf<Float>()
         val reader = BufferedReader(InputStreamReader(stream), INPUT_BUFFER_SIZE)
         var line: String
-        var lineArr: Array<String>
+        var lineArr: List<String>
 
         /*
         TODO:
@@ -93,21 +93,24 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
         while (reader.readLine().also { line = it.orEmpty() } != null) {
             line = line.trim()
-            lineArr = line.split(" ").toTypedArray()
-            if (line.startsWith("format ")) {
+            lineArr = line.split(" ")
+            if (lineArr.isEmpty()) {
+                continue
+            }
+            if (lineArr[0] == "format") {
                 if (line.contains("binary")) {
                     isBinary = true
                 }
-            } else if (line.startsWith("element ")) {
+            } else if (lineArr[0] == "element") {
                 val elementName = lineArr[1]
                 currentElement = mutableListOf()
                 elements[elementName] = currentElement
                 elementCounts[elementName] = lineArr[2].toInt()
-            } else if (line.startsWith("property ")) {
+            } else if (lineArr[0] == "property") {
                 val propType = lineArr[1] // TODO: should be all words until n-1
                 val propName = lineArr[lineArr.size - 1]
                 currentElement?.add(Pair(propType, propName))
-            } else if (line.startsWith("end_header")) {
+            } else if (lineArr[0] == "end_header") {
                 break
             }
         }
@@ -433,7 +436,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
     private fun readVerticesText(vertices: MutableList<Float>, colors: MutableList<Float>,
                                  vertexElement: List<Pair<String, String>>, reader: BufferedReader) {
-        var lineArr: Array<String>
+        var lineArr: List<String>
         var x: Float
         var y: Float
         var z: Float
@@ -465,7 +468,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         }
 
         for (i in 0 until vertexCount) {
-            lineArr = reader.readLine().trim().split(" ").toTypedArray()
+            lineArr = reader.readLine().trim().split(" ")
             x = lineArr[xIndex].toFloat()
             y = lineArr[yIndex].toFloat()
             z = lineArr[zIndex].toFloat()
