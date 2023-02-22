@@ -129,11 +129,9 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
         if (faceCount > 0) {
             if (isBinary) {
-                readFacesBinary(faceCount, indices, vertices, normalBucket, normalIndices,
-                    elements["face"]!!, stream)
+                readFacesBinary(faceCount, indices, vertices, normalBucket, normalIndices, stream)
             } else {
-                readFacesText(faceCount, indices, vertices, normalBucket, normalIndices,
-                    elements["face"]!!, reader)
+                readFacesText(faceCount, indices, vertices, normalBucket, normalIndices, reader)
             }
         }
 
@@ -185,11 +183,11 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
     private fun readFacesText(faceCount: Int, indices: MutableList<Int>, vertices: List<Float>,
                               normalBucket: MutableList<Float>, normalIndices: MutableList<Int>,
-                              facesElement: List<Pair<String, String>>, reader: BufferedReader) {
-        var index1 = 0
-        var index2 = 0
-        var index3 = 0
-        var index4 = 0
+                              reader: BufferedReader) {
+        var index1: Int
+        var index2: Int
+        var index3: Int
+        var index4: Int
         val intArr = IntArray(8)
         val customNormal = FloatArray(3)
 
@@ -219,8 +217,41 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
                 normalIndices.add((normalBucket.size - 1) / 3)
             } else if (intArr[0] == 4) {
                 // quad
-                // TODO
+                index1 = intArr[1]
+                index2 = intArr[2]
+                index3 = intArr[3]
+                index4 = intArr[4]
+                indices.add(index1)
+                indices.add(index2)
+                indices.add(index3)
+                indices.add(index1)
+                indices.add(index3)
+                indices.add(index4)
 
+                Util.calculateNormal(
+                    vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
+                    vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2],
+                    vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
+                    customNormal
+                )
+                normalBucket.add(customNormal[0])
+                normalBucket.add(customNormal[1])
+                normalBucket.add(customNormal[2])
+                normalIndices.add((normalBucket.size - 1) / 3)
+                normalIndices.add((normalBucket.size - 1) / 3)
+                normalIndices.add((normalBucket.size - 1) / 3)
+                Util.calculateNormal(
+                    vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
+                    vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
+                    vertices[index4 * 3], vertices[index4 * 3 + 1], vertices[index4 * 3 + 2],
+                    customNormal
+                )
+                normalBucket.add(customNormal[0])
+                normalBucket.add(customNormal[1])
+                normalBucket.add(customNormal[2])
+                normalIndices.add((normalBucket.size - 1) / 3)
+                normalIndices.add((normalBucket.size - 1) / 3)
+                normalIndices.add((normalBucket.size - 1) / 3)
             } else {
                 // unsupported, so fall back to point cloud.
                 isPointCloud = true
@@ -233,12 +264,12 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
     // Are there other types?
     private fun readFacesBinary(faceCount: Int, indices: MutableList<Int>, vertices: List<Float>,
                                 normalBucket: MutableList<Float>, normalIndices: MutableList<Int>,
-                                facesElement: List<Pair<String, String>>, stream: BufferedInputStream) {
+                                stream: BufferedInputStream) {
         val tempBytes = ByteArray(0x1000)
-        var index1 = 0
-        var index2 = 0
-        var index3 = 0
-        var index4 = 0
+        var index1: Int
+        var index2: Int
+        var index3: Int
+        var index4: Int
         val customNormal = FloatArray(3)
 
         for (i in 0 until faceCount) {
@@ -268,8 +299,42 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
                 normalIndices.add((normalBucket.size - 1) / 3)
             } else if (tempBytes[0].toInt() == 4) {
                 // quad
-                // TODO
+                stream.read(tempBytes, 0, 4 * BYTES_PER_INT)
+                index1 = readIntLe(tempBytes, 0)
+                index2 = readIntLe(tempBytes, 4)
+                index3 = readIntLe(tempBytes, 8)
+                index4 = readIntLe(tempBytes, 12)
+                indices.add(index1)
+                indices.add(index2)
+                indices.add(index3)
+                indices.add(index1)
+                indices.add(index3)
+                indices.add(index4)
 
+                Util.calculateNormal(
+                    vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
+                    vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2],
+                    vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
+                    customNormal
+                )
+                normalBucket.add(customNormal[0])
+                normalBucket.add(customNormal[1])
+                normalBucket.add(customNormal[2])
+                normalIndices.add((normalBucket.size - 1) / 3)
+                normalIndices.add((normalBucket.size - 1) / 3)
+                normalIndices.add((normalBucket.size - 1) / 3)
+                Util.calculateNormal(
+                    vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
+                    vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
+                    vertices[index4 * 3], vertices[index4 * 3 + 1], vertices[index4 * 3 + 2],
+                    customNormal
+                )
+                normalBucket.add(customNormal[0])
+                normalBucket.add(customNormal[1])
+                normalBucket.add(customNormal[2])
+                normalIndices.add((normalBucket.size - 1) / 3)
+                normalIndices.add((normalBucket.size - 1) / 3)
+                normalIndices.add((normalBucket.size - 1) / 3)
             } else {
                 // unsupported, so fall back to point cloud.
                 isPointCloud = true
