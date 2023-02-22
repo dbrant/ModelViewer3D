@@ -72,6 +72,8 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
     }
 
     private fun readText(stream: BufferedInputStream) {
+        val elements = mutableMapOf<String, List<String>>()
+        val elementCounts = mutableMapOf<String, Int>()
         val vertices = mutableListOf<Float>()
         val colors = mutableListOf<Float>()
         val reader = BufferedReader(InputStreamReader(stream), INPUT_BUFFER_SIZE)
@@ -87,6 +89,9 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         stream.mark(0x100000)
         var isBinary = false
         var propIndex = 0
+
+        var currentElement: List<String>? = null
+
         while (reader.readLine().also { line = it.orEmpty() } != null) {
             line = line.trim()
             lineArr = line.split(" ").toTypedArray()
@@ -94,7 +99,11 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
                 if (line.contains("binary")) {
                     isBinary = true
                 }
-            } else if (line.startsWith("element vertex")) {
+            } else if (line.startsWith("element ")) {
+                val elementName = lineArr[1]
+                currentElement = mutableListOf()
+                elements[elementName] = currentElement
+                elementCounts[elementName] = lineArr[2].toInt()
                 vertexCount = lineArr[2].toInt()
             } else if (line.startsWith("property ")) {
                 val propName = lineArr[lineArr.size - 1]
@@ -110,8 +119,11 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
                 break
             }
         }
+
+        vertexCount = elementCounts["vertex"] ?: 0
+
         if (vertexCount <= 0) {
-            return
+            throw IOException("No vertices found in model.")
         }
         if (rIndex >= 0 && gIndex >= 0 && bIndex >= 0) {
             haveColor = true
