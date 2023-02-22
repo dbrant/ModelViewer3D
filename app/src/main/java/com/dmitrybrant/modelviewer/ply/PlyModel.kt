@@ -5,11 +5,7 @@ import android.opengl.Matrix
 import com.dmitrybrant.modelviewer.IndexedModel
 import com.dmitrybrant.modelviewer.Light
 import com.dmitrybrant.modelviewer.R
-import com.dmitrybrant.modelviewer.obj.ObjModel
 import com.dmitrybrant.modelviewer.util.Util
-import com.dmitrybrant.modelviewer.util.Util.compileProgram
-import com.dmitrybrant.modelviewer.util.Util.readIntLe
-import com.dmitrybrant.modelviewer.util.Util.readLongLe
 import java.io.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -51,7 +47,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
                 GLES20.glDeleteProgram(glProgram)
                 glProgram = -1
             }
-            glProgram = compileProgram(R.raw.point_cloud_vertex, R.raw.point_cloud_fragment, arrayOf("a_Position", "a_Color"))
+            glProgram = Util.compileProgram(R.raw.point_cloud_vertex, R.raw.point_cloud_fragment, arrayOf("a_Position", "a_Color"))
         } else {
             super.init(boundSize)
         }
@@ -83,6 +79,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
         stream.mark(0x100000)
         var isBinary = false
+        var isBigEndian = false
 
         var currentElement: MutableList<Pair<String, String>>? = null
 
@@ -95,6 +92,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             if (lineArr[0] == "format") {
                 if (line.contains("binary")) {
                     isBinary = true
+                    isBigEndian = line.contains("big")
                 }
             } else if (lineArr[0] == "element") {
                 val elementName = lineArr[1]
@@ -117,7 +115,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
         if (isBinary) {
             stream.reset()
-            readVerticesBinary(vertices, colors, elements["vertex"]!!, stream)
+            readVerticesBinary(isBigEndian, vertices, colors, elements["vertex"]!!, stream)
         } else {
             readVerticesText(vertices, colors, elements["vertex"]!!, reader)
         }
@@ -127,7 +125,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
         if (faceCount > 0) {
             if (isBinary) {
-                readFacesBinary(faceCount, indices, vertices, normalBucket, normalIndices, stream)
+                readFacesBinary(isBigEndian, faceCount, indices, vertices, normalBucket, normalIndices, stream)
             } else {
                 readFacesText(faceCount, indices, vertices, normalBucket, normalIndices, reader)
             }
@@ -190,7 +188,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         val customNormal = FloatArray(3)
 
         for (i in 0 until faceCount) {
-            ObjModel.parseInts(reader.readLine().trim(), intArr)
+            parseInts(reader.readLine().trim(), intArr)
 
             if (intArr[0] == 3) {
                 // triangle
@@ -260,9 +258,9 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
     // TODO: The binary format of faces is currently assumed to be "uchar int"
     // Are there other types?
-    private fun readFacesBinary(faceCount: Int, indices: MutableList<Int>, vertices: List<Float>,
-                                normalBucket: MutableList<Float>, normalIndices: MutableList<Int>,
-                                stream: BufferedInputStream) {
+    private fun readFacesBinary(bigEndian: Boolean, faceCount: Int, indices: MutableList<Int>,
+                                vertices: List<Float>, normalBucket: MutableList<Float>,
+                                normalIndices: MutableList<Int>, stream: BufferedInputStream) {
         val tempBytes = ByteArray(0x1000)
         var index1: Int
         var index2: Int
@@ -276,9 +274,15 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             if (tempBytes[0].toInt() == 3) {
                 // triangle
                 stream.read(tempBytes, 0, 3 * BYTES_PER_INT)
-                index1 = readIntLe(tempBytes, 0)
-                index2 = readIntLe(tempBytes, 4)
-                index3 = readIntLe(tempBytes, 8)
+                if (bigEndian) {
+                    index1 = Util.readIntBe(tempBytes, 0)
+                    index2 = Util.readIntBe(tempBytes, 4)
+                    index3 = Util.readIntBe(tempBytes, 8)
+                } else {
+                    index1 = Util.readIntLe(tempBytes, 0)
+                    index2 = Util.readIntLe(tempBytes, 4)
+                    index3 = Util.readIntLe(tempBytes, 8)
+                }
                 indices.add(index1)
                 indices.add(index2)
                 indices.add(index3)
@@ -298,10 +302,17 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             } else if (tempBytes[0].toInt() == 4) {
                 // quad
                 stream.read(tempBytes, 0, 4 * BYTES_PER_INT)
-                index1 = readIntLe(tempBytes, 0)
-                index2 = readIntLe(tempBytes, 4)
-                index3 = readIntLe(tempBytes, 8)
-                index4 = readIntLe(tempBytes, 12)
+                if (bigEndian) {
+                    index1 = Util.readIntBe(tempBytes, 0)
+                    index2 = Util.readIntBe(tempBytes, 4)
+                    index3 = Util.readIntBe(tempBytes, 8)
+                    index4 = Util.readIntBe(tempBytes, 12)
+                } else {
+                    index1 = Util.readIntLe(tempBytes, 0)
+                    index2 = Util.readIntLe(tempBytes, 4)
+                    index3 = Util.readIntLe(tempBytes, 8)
+                    index4 = Util.readIntLe(tempBytes, 12)
+                }
                 indices.add(index1)
                 indices.add(index2)
                 indices.add(index3)
@@ -341,7 +352,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         }
     }
 
-    private fun readVerticesBinary(vertices: MutableList<Float>, colors: MutableList<Float>,
+    private fun readVerticesBinary(bigEndian: Boolean, vertices: MutableList<Float>, colors: MutableList<Float>,
                                    vertexElement: List<Pair<String, String>>, stream: BufferedInputStream) {
         val tempBytes = ByteArray(0x1000)
         stream.mark(1)
@@ -394,14 +405,26 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         for (i in 0 until vertexCount) {
             stream.read(tempBytes, 0, elementByteLength)
 
-            if (areVerticesDouble) {
-                x = java.lang.Double.longBitsToDouble(readLongLe(tempBytes, xOffset)).toFloat()
-                y = java.lang.Double.longBitsToDouble(readLongLe(tempBytes, yOffset)).toFloat()
-                z = java.lang.Double.longBitsToDouble(readLongLe(tempBytes, zOffset)).toFloat()
+            if (bigEndian) {
+                if (areVerticesDouble) {
+                    x = java.lang.Double.longBitsToDouble(Util.readLongBe(tempBytes, xOffset)).toFloat()
+                    y = java.lang.Double.longBitsToDouble(Util.readLongBe(tempBytes, yOffset)).toFloat()
+                    z = java.lang.Double.longBitsToDouble(Util.readLongBe(tempBytes, zOffset)).toFloat()
+                } else {
+                    x = java.lang.Float.intBitsToFloat(Util.readIntBe(tempBytes, xOffset))
+                    y = java.lang.Float.intBitsToFloat(Util.readIntBe(tempBytes, yOffset))
+                    z = java.lang.Float.intBitsToFloat(Util.readIntBe(tempBytes, zOffset))
+                }
             } else {
-                x = java.lang.Float.intBitsToFloat(readIntLe(tempBytes, xOffset))
-                y = java.lang.Float.intBitsToFloat(readIntLe(tempBytes, yOffset))
-                z = java.lang.Float.intBitsToFloat(readIntLe(tempBytes, zOffset))
+                if (areVerticesDouble) {
+                    x = java.lang.Double.longBitsToDouble(Util.readLongLe(tempBytes, xOffset)).toFloat()
+                    y = java.lang.Double.longBitsToDouble(Util.readLongLe(tempBytes, yOffset)).toFloat()
+                    z = java.lang.Double.longBitsToDouble(Util.readLongLe(tempBytes, zOffset)).toFloat()
+                } else {
+                    x = java.lang.Float.intBitsToFloat(Util.readIntLe(tempBytes, xOffset))
+                    y = java.lang.Float.intBitsToFloat(Util.readIntLe(tempBytes, yOffset))
+                    z = java.lang.Float.intBitsToFloat(Util.readIntLe(tempBytes, zOffset))
+                }
             }
 
             vertices.add(x)
