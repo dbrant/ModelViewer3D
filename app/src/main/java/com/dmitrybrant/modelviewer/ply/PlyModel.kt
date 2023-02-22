@@ -81,11 +81,6 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         var line: String
         var lineArr: List<String>
 
-        /*
-        TODO:
-        At the moment we only parse "vertex" elements, and render them as points.
-        (we do not parse "face" elements that tie together vertices)
-        */
         stream.mark(0x100000)
         var isBinary = false
 

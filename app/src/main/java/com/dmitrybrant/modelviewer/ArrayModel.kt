@@ -35,10 +35,10 @@ open class ArrayModel : Model() {
             GLES20.glDeleteProgram(glProgram)
             glProgram = -1
         }
-        if (useColorBuffer) {
-            glProgram = compileProgram(R.raw.model_vertex_color, R.raw.model_fragment_color, arrayOf("a_Position", "a_Normal", "a_Color"))
+        glProgram = if (useColorBuffer) {
+            compileProgram(R.raw.model_vertex_color, R.raw.model_fragment_color, arrayOf("a_Position", "a_Normal", "a_Color"))
         } else {
-            glProgram = compileProgram(R.raw.model_vertex, R.raw.single_light_fragment, arrayOf("a_Position", "a_Normal"))
+            compileProgram(R.raw.model_vertex, R.raw.single_light_fragment, arrayOf("a_Position", "a_Normal"))
         }
         super.init(boundSize)
     }
