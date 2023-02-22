@@ -172,25 +172,21 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         this.centerMassY = (centerMassY / vertexCount).toFloat()
         this.centerMassZ = (centerMassZ / vertexCount).toFloat()
 
-        val floatArray = FloatArray(vertices.size)
-        for (i in vertices.indices) {
-            floatArray[i] = vertices[i]
-        }
-        var vbb = ByteBuffer.allocateDirect(floatArray.size * BYTES_PER_FLOAT)
+        var vbb = ByteBuffer.allocateDirect(vertices.size * BYTES_PER_FLOAT)
         vbb.order(ByteOrder.nativeOrder())
         vertexBuffer = vbb.asFloatBuffer()
-        vertexBuffer!!.put(floatArray)
+        for (i in vertices.indices) {
+            vertexBuffer!!.put(vertices[i])
+        }
         vertexBuffer!!.position(0)
         indexCount = indices.size
 
-        val intArray = IntArray(indexCount)
-        for (i in 0 until indexCount) {
-            intArray[i] = indices[i]
-        }
         vbb = ByteBuffer.allocateDirect(indexCount * BYTES_PER_INT)
         vbb.order(ByteOrder.nativeOrder())
         indexBuffer = vbb.asIntBuffer()
-        indexBuffer!!.put(intArray)
+        for (i in 0 until indexCount) {
+            indexBuffer!!.put(indices[i])
+        }
         indexBuffer!!.position(0)
 
         val normalArray = FloatArray(vertices.size)
