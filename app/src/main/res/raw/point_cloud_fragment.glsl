@@ -1,6 +1,6 @@
 precision mediump float;
 
-uniform vec3 u_ambientColor;
+uniform vec4 u_ambientColor;
 varying vec4 v_Color;
 
 /*
