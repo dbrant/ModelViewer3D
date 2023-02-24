@@ -100,7 +100,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
                 elements[elementName] = currentElement
                 elementCounts[elementName] = lineArr[2].toInt()
             } else if (lineArr[0] == "property") {
-                val propType = lineArr[1] // TODO: should be all words until n-1
+                val propType = lineArr.subList(1, (lineArr.size - 1)).joinToString(" ")
                 val propName = lineArr[lineArr.size - 1]
                 currentElement?.add(Pair(propType, propName))
             } else if (lineArr[0] == "end_header") {
@@ -125,7 +125,12 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
         if (faceCount > 0) {
             if (isBinary) {
-                readFacesBinary(isBigEndian, faceCount, indices, vertices, normalBucket, normalIndices, stream)
+                val faceVertexIndexType = (elements["face"]!!.firstOrNull { it.second == "vertex_index" } ?: elements["face"]!!.first { it.second == "vertex_indices" }).first
+                lineArr = faceVertexIndexType.split(" ")
+                val indexLength = typeToSize(lineArr[lineArr.size - 2])
+                val itemLength = typeToSize(lineArr[lineArr.size - 1])
+                readFacesBinary(isBigEndian, indexLength, itemLength, faceCount, indices, vertices,
+                    normalBucket, normalIndices, stream)
             } else {
                 readFacesText(faceCount, indices, vertices, normalBucket, normalIndices, reader)
             }
@@ -258,10 +263,12 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
     // TODO: The binary format of faces is currently assumed to be "uchar int"
     // Are there other types?
-    private fun readFacesBinary(bigEndian: Boolean, faceCount: Int, indices: MutableList<Int>,
+    private fun readFacesBinary(bigEndian: Boolean, indexLen: Int, itemLen: Int,
+                                faceCount: Int, indices: MutableList<Int>,
                                 vertices: List<Float>, normalBucket: MutableList<Float>,
                                 normalIndices: MutableList<Int>, stream: BufferedInputStream) {
         val tempBytes = ByteArray(0x1000)
+        var elementCount = 0
         var index1: Int
         var index2: Int
         var index3: Int
@@ -269,19 +276,41 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         val customNormal = FloatArray(3)
 
         for (i in 0 until faceCount) {
-            stream.read(tempBytes, 0, 1)
-
-            if (tempBytes[0].toInt() == 3) {
+            stream.read(tempBytes, 0, indexLen)
+            elementCount = if (indexLen == 1) {
+                tempBytes[0].toInt()
+            } else if (indexLen == 2) {
+                if (bigEndian) Util.readShortBe(tempBytes, 0) else Util.readShortLe(tempBytes, 0)
+            } else {
+                if (bigEndian) Util.readIntBe(tempBytes, 0) else Util.readIntLe(tempBytes, 0)
+            }
+            stream.read(tempBytes, 0, elementCount * itemLen)
+            if (elementCount == 3) {
                 // triangle
-                stream.read(tempBytes, 0, 3 * BYTES_PER_INT)
-                if (bigEndian) {
-                    index1 = Util.readIntBe(tempBytes, 0)
-                    index2 = Util.readIntBe(tempBytes, 4)
-                    index3 = Util.readIntBe(tempBytes, 8)
+                if (itemLen == 1) {
+                    index1 = tempBytes[0].toInt()
+                    index2 = tempBytes[1].toInt()
+                    index3 = tempBytes[2].toInt()
+                } else if (itemLen == 2) {
+                    if (bigEndian) {
+                        index1 = Util.readShortBe(tempBytes, 0)
+                        index2 = Util.readShortBe(tempBytes, 2)
+                        index3 = Util.readShortBe(tempBytes, 4)
+                    } else {
+                        index1 = Util.readShortLe(tempBytes, 0)
+                        index2 = Util.readShortLe(tempBytes, 2)
+                        index3 = Util.readShortLe(tempBytes, 4)
+                    }
                 } else {
-                    index1 = Util.readIntLe(tempBytes, 0)
-                    index2 = Util.readIntLe(tempBytes, 4)
-                    index3 = Util.readIntLe(tempBytes, 8)
+                    if (bigEndian) {
+                        index1 = Util.readIntBe(tempBytes, 0)
+                        index2 = Util.readIntBe(tempBytes, 4)
+                        index3 = Util.readIntBe(tempBytes, 8)
+                    } else {
+                        index1 = Util.readIntLe(tempBytes, 0)
+                        index2 = Util.readIntLe(tempBytes, 4)
+                        index3 = Util.readIntLe(tempBytes, 8)
+                    }
                 }
                 indices.add(index1)
                 indices.add(index2)
@@ -299,19 +328,36 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
                 normalIndices.add((normalBucket.size - 1) / 3)
                 normalIndices.add((normalBucket.size - 1) / 3)
                 normalIndices.add((normalBucket.size - 1) / 3)
-            } else if (tempBytes[0].toInt() == 4) {
-                // quad
-                stream.read(tempBytes, 0, 4 * BYTES_PER_INT)
-                if (bigEndian) {
-                    index1 = Util.readIntBe(tempBytes, 0)
-                    index2 = Util.readIntBe(tempBytes, 4)
-                    index3 = Util.readIntBe(tempBytes, 8)
-                    index4 = Util.readIntBe(tempBytes, 12)
+            } else if (elementCount == 4) {
+                if (itemLen == 1) {
+                    index1 = tempBytes[0].toInt()
+                    index2 = tempBytes[1].toInt()
+                    index3 = tempBytes[2].toInt()
+                    index4 = tempBytes[3].toInt()
+                } else if (itemLen == 2) {
+                    if (bigEndian) {
+                        index1 = Util.readShortBe(tempBytes, 0)
+                        index2 = Util.readShortBe(tempBytes, 2)
+                        index3 = Util.readShortBe(tempBytes, 4)
+                        index4 = Util.readShortBe(tempBytes, 6)
+                    } else {
+                        index1 = Util.readShortLe(tempBytes, 0)
+                        index2 = Util.readShortLe(tempBytes, 2)
+                        index3 = Util.readShortLe(tempBytes, 4)
+                        index4 = Util.readShortLe(tempBytes, 6)
+                    }
                 } else {
-                    index1 = Util.readIntLe(tempBytes, 0)
-                    index2 = Util.readIntLe(tempBytes, 4)
-                    index3 = Util.readIntLe(tempBytes, 8)
-                    index4 = Util.readIntLe(tempBytes, 12)
+                    if (bigEndian) {
+                        index1 = Util.readIntBe(tempBytes, 0)
+                        index2 = Util.readIntBe(tempBytes, 4)
+                        index3 = Util.readIntBe(tempBytes, 8)
+                        index4 = Util.readIntBe(tempBytes, 12)
+                    } else {
+                        index1 = Util.readIntLe(tempBytes, 0)
+                        index2 = Util.readIntLe(tempBytes, 4)
+                        index3 = Util.readIntLe(tempBytes, 8)
+                        index4 = Util.readIntLe(tempBytes, 12)
+                    }
                 }
                 indices.add(index1)
                 indices.add(index2)
@@ -473,6 +519,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         var gIndex = -1
         var bIndex = -1
         var alphaIndex = -1
+        val spaceRegex = "\\s+".toRegex()
 
         for (i in vertexElement.indices) {
             if (vertexElement[i].second == "x" && xIndex < 0) { xIndex = i }
@@ -489,7 +536,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         }
 
         for (i in 0 until vertexCount) {
-            lineArr = reader.readLine().trim().split(" ")
+            lineArr = reader.readLine().trim().split(spaceRegex)
             x = lineArr[xIndex].toFloat()
             y = lineArr[yIndex].toFloat()
             z = lineArr[zIndex].toFloat()
@@ -548,15 +595,49 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         return when (typeStr) {
             "char" -> 1
             "uchar" -> 1
+            "uint8" -> 1
             "short" -> 2
             "ushort" -> 2
+            "int16" -> 4
             "int" -> 4
             "uint" -> 4
+            "int32" -> 4
             "long" -> 8
             "ulong" -> 8
             "float" -> 4
+            "float32" -> 4
             "double" -> 8
             else -> 0
+        }
+    }
+
+    companion object {
+        // This is a method that takes a string and parses any integers out of it (in place, without
+        // using any additional string splitting, regexes, or int parsing), which provides a pretty
+        // significant speed gain.
+        fun parseInts(str: String, ints: IntArray) {
+            val len = str.length
+            var intIndex = 0
+            var currentInt = -1
+            for (i in 0 until len) {
+                val c = str[i]
+                if (c in '0'..'9') {
+                    if (currentInt == -1) {
+                        currentInt = c - '0'
+                    } else {
+                        currentInt *= 10
+                        currentInt += c - '0'
+                    }
+                } else {
+                    if (currentInt >= 0) {
+                        ints[intIndex++] = currentInt
+                        currentInt = -1
+                    }
+                }
+            }
+            if (currentInt >= 0) {
+                ints[intIndex] = currentInt
+            }
         }
     }
 }

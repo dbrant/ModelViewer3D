@@ -94,42 +94,5 @@ open class ArrayModel : Model() {
         const val COORDS_PER_VERTEX = 3
         const val VERTEX_STRIDE = COORDS_PER_VERTEX * BYTES_PER_FLOAT
         const val INPUT_BUFFER_SIZE = 0x10000
-
-        // This is a method that takes a string and parses any integers out of it (in place, without
-        // using any additional string splitting, regexes, or int parsing), which provides a pretty
-        // significant speed gain.
-        // - The first three output integers are pre-initialized to -1.
-        // - The integers in the string are expected to be delimited by a single non-numeric character.
-        //   If a non-numeric character follows another non-numeric character, then an integer value
-        //   of -1 will be added to the output array.
-        fun parseInts(str: String, ints: IntArray) {
-            val len = str.length
-            var intIndex = 0
-            var currentInt = -1
-            ints[0] = -1
-            ints[1] = -1
-            ints[2] = -1
-            for (i in 0 until len) {
-                val c = str[i]
-                if (c in '0'..'9') {
-                    if (currentInt == -1) {
-                        currentInt = c - '0'
-                    } else {
-                        currentInt *= 10
-                        currentInt += c - '0'
-                    }
-                } else {
-                    if (currentInt >= 0) {
-                        ints[intIndex++] = currentInt
-                        currentInt = -1
-                    } else {
-                        ints[intIndex++] = -1
-                    }
-                }
-            }
-            if (currentInt >= 0) {
-                ints[intIndex] = currentInt
-            }
-        }
     }
 }
