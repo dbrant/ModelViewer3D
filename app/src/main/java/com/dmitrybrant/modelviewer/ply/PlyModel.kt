@@ -85,7 +85,10 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
         while (reader.readLine().also { line = it.orEmpty() } != null) {
             line = line.trim()
-            lineArr = line.split(" ")
+            if (line.isEmpty())
+                continue
+
+            lineArr = line.split(spaceRegex)
             if (lineArr.isEmpty()) {
                 continue
             }
@@ -185,15 +188,22 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
     private fun readFacesText(faceCount: Int, indices: MutableList<Int>, vertices: List<Float>,
                               normalBucket: MutableList<Float>, normalIndices: MutableList<Int>,
                               reader: BufferedReader) {
+        var line: String
         var index1: Int
         var index2: Int
         var index3: Int
         var index4: Int
         val intArr = IntArray(8)
         val customNormal = FloatArray(3)
+        var i = 0
 
-        for (i in 0 until faceCount) {
-            parseInts(reader.readLine().trim(), intArr)
+        while (i < faceCount) {
+            line = reader.readLine().trim()
+            if (line.isEmpty())
+                continue
+            i++
+
+            parseInts(line, intArr)
 
             if (intArr[0] == 3) {
                 // triangle
@@ -268,7 +278,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
                                 vertices: List<Float>, normalBucket: MutableList<Float>,
                                 normalIndices: MutableList<Int>, stream: BufferedInputStream) {
         val tempBytes = ByteArray(0x1000)
-        var elementCount = 0
+        var elementCount: Int
         var index1: Int
         var index2: Int
         var index3: Int
@@ -504,6 +514,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
 
     private fun readVerticesText(vertices: MutableList<Float>, colors: MutableList<Float>,
                                  vertexElement: List<Pair<String, String>>, reader: BufferedReader) {
+        var line: String
         var lineArr: List<String>
         var x: Float
         var y: Float
@@ -519,7 +530,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         var gIndex = -1
         var bIndex = -1
         var alphaIndex = -1
-        val spaceRegex = "\\s+".toRegex()
+        var i = 0
 
         for (i in vertexElement.indices) {
             if (vertexElement[i].second == "x" && xIndex < 0) { xIndex = i }
@@ -535,8 +546,13 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             useColorBuffer = true
         }
 
-        for (i in 0 until vertexCount) {
-            lineArr = reader.readLine().trim().split(spaceRegex)
+        while (i < vertexCount) {
+            line = reader.readLine().trim()
+            if (line.isEmpty())
+                continue
+            i++
+
+            lineArr = line.split(spaceRegex)
             x = lineArr[xIndex].toFloat()
             y = lineArr[yIndex].toFloat()
             z = lineArr[zIndex].toFloat()
@@ -612,6 +628,8 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
     }
 
     companion object {
+        private val spaceRegex = "\\s+".toRegex()
+
         // This is a method that takes a string and parses any integers out of it (in place, without
         // using any additional string splitting, regexes, or int parsing), which provides a pretty
         // significant speed gain.
