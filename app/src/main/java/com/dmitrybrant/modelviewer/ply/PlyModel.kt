@@ -530,7 +530,6 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         var gIndex = -1
         var bIndex = -1
         var alphaIndex = -1
-        var i = 0
 
         for (i in vertexElement.indices) {
             if (vertexElement[i].second == "x" && xIndex < 0) { xIndex = i }
@@ -546,6 +545,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             useColorBuffer = true
         }
 
+        var i = 0
         while (i < vertexCount) {
             line = reader.readLine().trim()
             if (line.isEmpty())
