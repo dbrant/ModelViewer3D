@@ -604,6 +604,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         GLES20.glUniform1f(pointThicknessHandle, 3.0f)
         GLES20.glUniform4fv(ambientColorHandle, 1, pointColor, 0)
         GLES20.glDrawArrays(GLES20.GL_POINTS, 0, vertexCount)
+        GLES20.glDisableVertexAttribArray(colorHandle)
         GLES20.glDisableVertexAttribArray(positionHandle)
     }
 
