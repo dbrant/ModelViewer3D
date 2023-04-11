@@ -7,7 +7,7 @@ android {
         applicationId "com.dmitrybrant.modelviewer"
         minSdkVersion 19
         targetSdkVersion 33
-        versionCode 18
+        versionCode 19
         vectorDrawables.useSupportLibrary true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
