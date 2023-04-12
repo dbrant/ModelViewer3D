@@ -593,7 +593,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         val positionHandle = GLES20.glGetAttribLocation(glProgram, "a_Position")
         val colorHandle = GLES20.glGetAttribLocation(glProgram, "a_Color")
         val pointThicknessHandle = GLES20.glGetUniformLocation(glProgram, "u_PointThickness")
-        // val ambientColorHandle = GLES20.glGetUniformLocation(glProgram, "u_ambientColor")
+        val ambientColorHandle = GLES20.glGetUniformLocation(glProgram, "u_ambientColor")
         GLES20.glEnableVertexAttribArray(positionHandle)
         GLES20.glVertexAttribPointer(positionHandle, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, VERTEX_STRIDE, vertexBuffer)
         GLES20.glEnableVertexAttribArray(colorHandle)
@@ -602,7 +602,9 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         Matrix.multiplyMM(mvpMatrix, 0, projectionMatrix, 0, mvMatrix, 0)
         GLES20.glUniformMatrix4fv(mvpMatrixHandle, 1, false, mvpMatrix, 0)
         GLES20.glUniform1f(pointThicknessHandle, 3.0f)
-        // GLES20.glUniform4fv(ambientColorHandle, 1, pointColor, 0)
+        if (ambientColorHandle >= 0) {
+            GLES20.glUniform4fv(ambientColorHandle, 1, pointColor, 0)
+        }
         GLES20.glDrawArrays(GLES20.GL_POINTS, 0, vertexCount)
         GLES20.glDisableVertexAttribArray(colorHandle)
         GLES20.glDisableVertexAttribArray(positionHandle)

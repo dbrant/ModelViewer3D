@@ -56,6 +56,7 @@ open class ArrayModel : Model() {
         val ambientColorHandle = GLES20.glGetUniformLocation(glProgram, "u_ambientColor")
         val diffuseColorHandle = GLES20.glGetUniformLocation(glProgram, "u_diffuseColor")
         val specularColorHandle = GLES20.glGetUniformLocation(glProgram, "u_specularColor")
+        var colorHandle = -1
 
         GLES20.glEnableVertexAttribArray(positionHandle)
         GLES20.glVertexAttribPointer(positionHandle, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false,
@@ -65,7 +66,7 @@ open class ArrayModel : Model() {
                 VERTEX_STRIDE, normalBuffer)
 
         if (colorBuffer != null) {
-            val colorHandle = GLES20.glGetAttribLocation(glProgram, "a_Color")
+            colorHandle = GLES20.glGetAttribLocation(glProgram, "a_Color")
             GLES20.glEnableVertexAttribArray(colorHandle)
             GLES20.glVertexAttribPointer(colorHandle, 4, GLES20.GL_FLOAT, false, 4 * BYTES_PER_FLOAT, colorBuffer)
         }
@@ -75,12 +76,19 @@ open class ArrayModel : Model() {
 
         GLES20.glUniformMatrix4fv(mvpMatrixHandle, 1, false, mvpMatrix, 0)
         GLES20.glUniform3fv(lightPosHandle, 1, light.positionInEyeSpace, 0)
-        GLES20.glUniform4fv(ambientColorHandle, 1, light.ambientColor, 0)
-        GLES20.glUniform4fv(diffuseColorHandle, 1, light.diffuseColor, 0)
+        if (ambientColorHandle >= 0) {
+            GLES20.glUniform4fv(ambientColorHandle, 1, light.ambientColor, 0)
+        }
+        if (diffuseColorHandle >= 0) {
+            GLES20.glUniform4fv(diffuseColorHandle, 1, light.diffuseColor, 0)
+        }
         GLES20.glUniform4fv(specularColorHandle, 1, light.specularColor, 0)
 
         drawFunc()
 
+        if (colorHandle >= 0) {
+            GLES20.glDisableVertexAttribArray(colorHandle)
+        }
         GLES20.glDisableVertexAttribArray(normalHandle)
         GLES20.glDisableVertexAttribArray(positionHandle)
     }

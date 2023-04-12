@@ -99,11 +99,11 @@ class Floor : ArrayModel() {
         val maxDepthHandle = GLES20.glGetUniformLocation(glProgram, "u_MaxDepth")
         val gridUnitHandle = GLES20.glGetUniformLocation(glProgram, "u_GridUnit")
         GLES20.glEnableVertexAttribArray(positionHandle)
-        GLES20.glVertexAttribPointer(positionHandle, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false,
-                VERTEX_STRIDE, vertexBuffer)
-        GLES20.glEnableVertexAttribArray(normalHandle)
-        GLES20.glVertexAttribPointer(normalHandle, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false,
-                VERTEX_STRIDE, normalBuffer)
+        GLES20.glVertexAttribPointer(positionHandle, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, VERTEX_STRIDE, vertexBuffer)
+        if (normalHandle >= 0) {
+            GLES20.glEnableVertexAttribArray(normalHandle)
+            GLES20.glVertexAttribPointer(normalHandle, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, VERTEX_STRIDE, normalBuffer)
+        }
         GLES20.glUniformMatrix4fv(modelMatrixHandle, 1, false, modelMatrix, 0)
         Matrix.multiplyMM(mvMatrix, 0, viewMatrix, 0, modelMatrix, 0)
         Matrix.multiplyMM(mvpMatrix, 0, projectionMatrix, 0, mvMatrix, 0)
@@ -113,7 +113,9 @@ class Floor : ArrayModel() {
         GLES20.glUniform1f(maxDepthHandle, extent)
         GLES20.glUniform1f(gridUnitHandle, extent / 75.0f)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, vertexCount)
-        GLES20.glDisableVertexAttribArray(normalHandle)
+        if (normalHandle >= 0) {
+            GLES20.glDisableVertexAttribArray(normalHandle)
+        }
         GLES20.glDisableVertexAttribArray(positionHandle)
     }
 }
