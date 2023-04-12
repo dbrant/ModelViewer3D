@@ -498,7 +498,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
                 if (alphaOffset >= 0) {
                     colors.add((tempBytes[alphaOffset].toInt()and 0xff).toFloat() / 255f)
                 } else {
-                    colors.add(255f)
+                    colors.add(1f)
                 }
             } else {
                 colors.add(pointColor[0])
