@@ -492,11 +492,11 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             centerMassZ += z.toDouble()
 
             if (useColorBuffer) {
-                colors.add(tempBytes[rOffset].toInt().toFloat() / 255f)
-                colors.add(tempBytes[rOffset].toInt().toFloat() / 255f)
-                colors.add(tempBytes[rOffset].toInt().toFloat() / 255f)
+                colors.add((tempBytes[rOffset].toInt() and 0xff).toFloat() / 255f)
+                colors.add((tempBytes[gOffset].toInt() and 0xff).toFloat() / 255f)
+                colors.add((tempBytes[bOffset].toInt() and 0xff).toFloat() / 255f)
                 if (alphaOffset >= 0) {
-                    colors.add(tempBytes[alphaOffset].toInt().toFloat() / 255f)
+                    colors.add((tempBytes[alphaOffset].toInt()and 0xff).toFloat() / 255f)
                 } else {
                     colors.add(255f)
                 }
