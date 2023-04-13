@@ -614,13 +614,18 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         return when (typeStr) {
             "char" -> 1
             "uchar" -> 1
+            "int8" -> 1
             "uint8" -> 1
             "short" -> 2
             "ushort" -> 2
-            "int16" -> 4
+            "int16" -> 2
+            "uint16" -> 2
             "int" -> 4
-            "uint" -> 4
             "int32" -> 4
+            "uint" -> 4
+            "uint32" -> 4
+            "int64" -> 8
+            "uint64" -> 8
             "long" -> 8
             "ulong" -> 8
             "float" -> 4
