@@ -41,7 +41,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         }
     }
 
-    override fun init(boundSize: Float) {
+    override fun setup(boundSize: Float) {
         if (isPointCloud) {
             if (GLES20.glIsProgram(glProgram)) {
                 GLES20.glDeleteProgram(glProgram)
@@ -49,7 +49,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             }
             glProgram = Util.compileProgram(R.raw.point_cloud_vertex, R.raw.point_cloud_fragment, arrayOf("a_Position", "a_Color"))
         } else {
-            super.init(boundSize)
+            super.setup(boundSize)
         }
         initModelMatrix(boundSize)
     }

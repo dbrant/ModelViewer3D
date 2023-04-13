@@ -26,7 +26,7 @@ class Floor : ArrayModel() {
     private val lineColor = floatArrayOf(0.6f, 0.6f, 0.6f, 0.5f)
     private var extent = 0f
 
-    override fun init(boundSize: Float) {
+    override fun setup(boundSize: Float) {
         extent = boundSize * 5.0f
 
         // The grid lines on the floor are rendered procedurally and large polygons cause floating point

@@ -99,7 +99,7 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
         GLES20.glClearColor(0.2f, 0.2f, 0.2f, 1f)
         GLES20.glEnable(GLES20.GL_CULL_FACE)
         GLES20.glEnable(GLES20.GL_DEPTH_TEST)
-        ModelViewerApplication.currentModel?.init(MODEL_BOUND_SIZE)
+        ModelViewerApplication.currentModel?.setup(MODEL_BOUND_SIZE)
         checkGLError("onSurfaceCreated")
     }
 

@@ -44,7 +44,7 @@ abstract class Model {
     protected var minY = Float.MAX_VALUE
     protected var minZ = Float.MAX_VALUE
 
-    open fun init(boundSize: Float) {
+    open fun setup(boundSize: Float) {
         initModelMatrix(boundSize)
     }
 

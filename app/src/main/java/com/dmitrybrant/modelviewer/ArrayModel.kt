@@ -30,7 +30,7 @@ open class ArrayModel : Model() {
     protected var colorBuffer: FloatBuffer? = null
     protected var useColorBuffer = false
 
-    override fun init(boundSize: Float) {
+    override fun setup(boundSize: Float) {
         if (GLES20.glIsProgram(glProgram)) {
             GLES20.glDeleteProgram(glProgram)
             glProgram = -1
@@ -40,7 +40,7 @@ open class ArrayModel : Model() {
         } else {
             compileProgram(R.raw.model_vertex, R.raw.single_light_fragment, arrayOf("a_Position", "a_Normal"))
         }
-        super.init(boundSize)
+        super.setup(boundSize)
     }
 
     override fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray, light: Light) {
