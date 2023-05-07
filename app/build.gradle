@@ -20,17 +20,18 @@ android {
     }
     buildTypes {
         debug {
-            minifyEnabled true
+            minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
         release {
-            minifyEnabled true
+            // Disable minify for now, until we remove the com.google.vr dependency.
+            minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
     compileOptions {
-        targetCompatibility 1.8
-        sourceCompatibility 1.8
+        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_17
     }
     lint {
         abortOnError false
@@ -45,9 +46,9 @@ dependencies {
     })
 
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
-    implementation 'com.google.android.material:material:1.8.0'
-    implementation 'androidx.activity:activity-ktx:1.7.0'
-    implementation 'androidx.fragment:fragment-ktx:1.5.6'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'androidx.activity:activity-ktx:1.7.1'
+    implementation 'androidx.fragment:fragment-ktx:1.5.7'
     implementation 'com.squareup.okhttp3:okhttp:4.10.0'
     implementation "io.reactivex.rxjava3:rxjava:3.1.6"
     implementation "io.reactivex.rxjava3:rxandroid:3.0.2"
