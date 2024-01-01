@@ -6,7 +6,7 @@ Sample models from the Stanford [3D Scanning Repository](https://graphics.stanfo
 
 ## License
 
-Copyright 2017–2023 Dmitry Brant
+Copyright 2017+ Dmitry Brant
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
