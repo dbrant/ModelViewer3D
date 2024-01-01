@@ -9,6 +9,7 @@ android {
         targetSdk 34
         versionCode 20
         vectorDrawables.useSupportLibrary true
+        multiDexEnabled true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
