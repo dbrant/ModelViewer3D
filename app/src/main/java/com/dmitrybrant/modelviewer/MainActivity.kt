@@ -19,23 +19,31 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContentResolverCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
+import androidx.lifecycle.lifecycleScope
 import com.dmitrybrant.modelviewer.databinding.ActivityMainBinding
 import com.dmitrybrant.modelviewer.gvr.ModelGvrActivity
 import com.dmitrybrant.modelviewer.obj.ObjModel
+import com.dmitrybrant.modelviewer.obj.bean.ObjectBean
 import com.dmitrybrant.modelviewer.ply.PlyModel
 import com.dmitrybrant.modelviewer.stl.StlModel
+import com.dmitrybrant.modelviewer.util.LoadObjectUtil
 import com.dmitrybrant.modelviewer.util.Util.closeSilently
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import io.reactivex.rxjava3.core.Observable
 import io.reactivex.rxjava3.disposables.CompositeDisposable
 import io.reactivex.rxjava3.schedulers.Schedulers
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
 import java.util.*
+import kotlin.collections.ArrayList
 
 /*
 * Copyright 2017-2022 Dmitry Brant. All rights reserved.
@@ -58,22 +66,26 @@ class MainActivity : AppCompatActivity() {
     private var sampleModelIndex = 0
     private var modelView: ModelSurfaceView? = null
     private val disposables = CompositeDisposable()
+    private var list: MutableList<ObjectBean>? = null
+    private val dir = "nanosuit"
 
-    private val openDocumentLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (it.resultCode == Activity.RESULT_OK && it.data?.data != null) {
-            val uri = it.data?.data
-            grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            beginLoadModel(uri!!)
+    private val openDocumentLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (it.resultCode == Activity.RESULT_OK && it.data?.data != null) {
+                val uri = it.data?.data
+                grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                beginLoadModel(uri!!)
+            }
         }
-    }
 
-    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-        if (isGranted) {
-            beginOpenModel()
-        } else {
-            Toast.makeText(this, R.string.read_permission_failed, Toast.LENGTH_SHORT).show()
+    private val requestPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                beginOpenModel()
+            } else {
+                Toast.makeText(this, R.string.read_permission_failed, Toast.LENGTH_SHORT).show()
+            }
         }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -108,7 +120,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        createNewModelView(ModelViewerApplication.currentModel)
+        createNewModelView(null)
         if (ModelViewerApplication.currentModel != null) {
             title = ModelViewerApplication.currentModel!!.title
         }
@@ -140,21 +152,33 @@ class MainActivity : AppCompatActivity() {
                 checkReadPermissionThenOpen()
                 true
             }
+
             R.id.menu_load_sample -> {
                 loadSampleModel()
                 true
             }
+
+            R.id.menu_load_obj_texture -> {
+                loadObjTexture()
+                true
+            }
+
             R.id.menu_about -> {
                 showAboutDialog()
                 true
             }
+
             else -> super.onOptionsItemSelected(item)
         }
     }
 
     private fun checkReadPermissionThenOpen() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
-            (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)) {
+            (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED)
+        ) {
             requestPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
         } else {
             beginOpenModel()
@@ -166,7 +190,7 @@ class MainActivity : AppCompatActivity() {
         openDocumentLauncher.launch(intent)
     }
 
-    private fun createNewModelView(model: Model?) {
+    private fun createNewModelView(model: MutableList<Model>?) {
         if (modelView != null) {
             binding.containerView.removeView(modelView)
         }
@@ -199,12 +223,14 @@ class MainActivity : AppCompatActivity() {
                             fileName.lowercase(Locale.ROOT).endsWith(".stl") -> {
                                 StlModel(stream)
                             }
-                            fileName.lowercase(Locale.ROOT).endsWith(".obj") -> {
-                                ObjModel(stream)
-                            }
+//                            TODO obj need mtl file and texture
+//                            fileName.lowercase(Locale.ROOT).endsWith(".obj") -> {
+//                                ObjModel(stream)
+//                            }
                             fileName.lowercase(Locale.ROOT).endsWith(".ply") -> {
                                 PlyModel(stream)
                             }
+
                             else -> {
                                 // assume it's STL.
                                 StlModel(stream)
@@ -223,34 +249,40 @@ class MainActivity : AppCompatActivity() {
                 closeSilently(stream)
             }
         }.subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .doAfterTerminate {
-                    binding.progressBar.visibility = View.GONE
-                }
-                .subscribe({
-                    setCurrentModel(it)
-                }, {
-                    it.printStackTrace()
-                    Toast.makeText(applicationContext, getString(R.string.open_model_error, it.message), Toast.LENGTH_SHORT).show()
-                }))
+            .observeOn(AndroidSchedulers.mainThread())
+            .doAfterTerminate {
+                binding.progressBar.visibility = View.GONE
+            }
+            .subscribe({
+                setCurrentModel(mutableListOf(it))
+            }, {
+                it.printStackTrace()
+                Toast.makeText(
+                    applicationContext,
+                    getString(R.string.open_model_error, it.message),
+                    Toast.LENGTH_SHORT
+                ).show()
+            })
+        )
     }
 
     private fun getFileName(cr: ContentResolver, uri: Uri): String? {
         if ("content" == uri.scheme) {
             val projection = arrayOf(MediaStore.MediaColumns.DISPLAY_NAME)
-            ContentResolverCompat.query(cr, uri, projection, null, null, null, null)?.use { metaCursor ->
-                if (metaCursor.moveToFirst()) {
-                    return metaCursor.getString(0)
+            ContentResolverCompat.query(cr, uri, projection, null, null, null, null)
+                ?.use { metaCursor ->
+                    if (metaCursor.moveToFirst()) {
+                        return metaCursor.getString(0)
+                    }
                 }
-            }
         }
         return uri.lastPathSegment
     }
 
-    private fun setCurrentModel(model: Model) {
+    private fun setCurrentModel(model: MutableList<Model>) {
         createNewModelView(model)
         Toast.makeText(applicationContext, R.string.open_model_success, Toast.LENGTH_SHORT).show()
-        title = model.title
+        title = model[0].title
         binding.progressBar.visibility = View.GONE
     }
 
@@ -265,18 +297,31 @@ class MainActivity : AppCompatActivity() {
     private fun loadSampleModel() {
         try {
             val stream = assets.open(sampleModels[sampleModelIndex++ % sampleModels.size])
-            setCurrentModel(StlModel(stream))
+            setCurrentModel(mutableListOf(StlModel(stream)))
             stream.close()
         } catch (e: IOException) {
             e.printStackTrace()
         }
     }
 
+    private fun loadObjTexture() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            list = LoadObjectUtil.loadObject(dir + "/nanosuit.obj", resources, dir)
+            var models: MutableList<Model> = ArrayList()
+            for (item in list!!) {
+                models.add(ObjModel(objectBean = item, morethanOne = list!!.size > 1))
+            }
+            withContext(Dispatchers.Main) {
+                setCurrentModel(models)
+            }
+        }
+    }
+
     private fun showAboutDialog() {
         MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.app_name)
-                .setMessage(R.string.about_text)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
+            .setTitle(R.string.app_name)
+            .setMessage(R.string.about_text)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 }

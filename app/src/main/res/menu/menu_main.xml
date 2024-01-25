@@ -9,6 +9,9 @@
     <item android:id="@+id/menu_load_sample"
         android:title="@string/load_sample"
         app:showAsAction="never" />
+    <item android:id="@+id/menu_load_obj_texture"
+        android:title="@string/load_obj_texture"
+        app:showAsAction="never" />
     <item android:id="@+id/menu_about"
         android:title="@string/about"
         app:showAsAction="never" />

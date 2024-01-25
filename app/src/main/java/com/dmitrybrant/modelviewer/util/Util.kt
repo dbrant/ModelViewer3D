@@ -1,6 +1,8 @@
 package com.dmitrybrant.modelviewer.util
 
+import android.graphics.Bitmap
 import android.opengl.GLES20
+import android.opengl.GLUtils
 import android.util.Log
 import androidx.annotation.RawRes
 import com.dmitrybrant.modelviewer.ModelViewerApplication
@@ -140,5 +142,69 @@ object Util {
             closeSilently(inputStream)
         }
         throw RuntimeException("Failed to read raw resource id $resourceId")
+    }
+
+    /**
+     * load bitmap texture
+     * @param bitmap bitmap
+     * @return int
+     */
+    fun createTextureNormal(bitmap: Bitmap?, withAlpha: Boolean): Int {
+        val texture = IntArray(1)
+        if (bitmap != null && !bitmap.isRecycled) {
+            //生成纹理
+            GLES20.glGenTextures(1, texture, 0)
+           checkGlError("glGenTexture")
+            //生成纹理
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture[0])
+            GLES20.glTexParameteri(
+                GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER,
+                GLES20.GL_LINEAR
+            )
+            GLES20.glTexParameteri(
+                GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER,
+                GLES20.GL_LINEAR
+            )
+            GLES20.glTexParameteri(
+                GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S,
+                if (withAlpha) GLES20.GL_CLAMP_TO_EDGE else GLES20.GL_REPEAT
+            )
+            GLES20.glTexParameteri(
+                GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T,
+                if (withAlpha) GLES20.GL_CLAMP_TO_EDGE else GLES20.GL_REPEAT
+            )
+            //根据以上指定的参数，生成一个2D纹理
+            GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
+            return texture[0]
+        }
+        return 0
+    }
+
+    /**
+     * check error
+     * @param op op
+     */
+    private fun checkGlError(op: String) {
+        val error = GLES20.glGetError()
+        if (error != GLES20.GL_NO_ERROR) {
+            val msg = op + ": glError 0x" + Integer.toHexString(error)
+            LogUtil.e(msg)
+            throw java.lang.RuntimeException(msg)
+        }
+    }
+
+    /**
+     * 绑定纹理
+     * @param location
+     * @param texture
+     * @param index
+     * @param textureType
+     */
+    fun bindTexture(location: Int, texture: Int, index: Int) {
+        // 最多支持绑定32个纹理
+        require(index <= 31) { "index must be no more than 31!" }
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + index)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture)
+        GLES20.glUniform1i(location, index)
     }
 }

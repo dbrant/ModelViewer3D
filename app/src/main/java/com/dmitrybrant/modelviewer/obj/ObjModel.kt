@@ -1,10 +1,21 @@
 package com.dmitrybrant.modelviewer.obj
 
+import android.graphics.BitmapFactory
+import android.opengl.GLES20
+import android.opengl.Matrix
+import android.renderscript.Matrix4f
+import android.text.TextUtils
 import com.dmitrybrant.modelviewer.IndexedModel
-import com.dmitrybrant.modelviewer.util.Util.calculateNormal
-import java.io.*
+import com.dmitrybrant.modelviewer.Light
+import com.dmitrybrant.modelviewer.ModelViewerApplication
+import com.dmitrybrant.modelviewer.R
+import com.dmitrybrant.modelviewer.obj.bean.ObjectBean
+import com.dmitrybrant.modelviewer.util.LogUtil
+import com.dmitrybrant.modelviewer.util.Util
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.FloatBuffer
 
 /*
 *
@@ -26,11 +37,11 @@ import java.nio.ByteOrder
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-class ObjModel(inputStream: InputStream) : IndexedModel() {
+class ObjModel(var objectBean: ObjectBean,var fileName : String = "nanosuit",var morethanOne:Boolean = true) : IndexedModel() {
+    private var textCoorBuffer : FloatBuffer? = null
     init {
-        val stream = BufferedInputStream(inputStream, INPUT_BUFFER_SIZE)
-        readText(stream)
-        if (vertexCount <= 0 || vertexBuffer == null || normalBuffer == null || indexCount <= 0 || indexBuffer == null) {
+        readObjectBean(objectBean)
+        if (vertexCount <= 0 || vertexBuffer == null || normalBuffer == null) {
             throw IOException("Invalid model.")
         }
     }
@@ -45,203 +56,216 @@ class ObjModel(inputStream: InputStream) : IndexedModel() {
         floorOffset = (minY - centerMassY) / scale
     }
 
-    private fun readText(stream: InputStream) {
-        val normalBucket = mutableListOf<Float>()
-        val vertices = mutableListOf<Float>()
-        val indices = mutableListOf<Int>()
-        val normalIndices = mutableListOf<Int>()
-
-        val reader = BufferedReader(InputStreamReader(stream), INPUT_BUFFER_SIZE)
-        var line: String
-        var lineArr: List<String>
-        val intArr = Array(4) { IntArray(8) }
-        var index1: Int
-        var index2: Int
-        var index3: Int
-        var index4: Int
-        val customNormal = FloatArray(3)
-
-        var x: Float
-        var y: Float
-        var z: Float
-        var centerMassX = 0.0
-        var centerMassY = 0.0
-        var centerMassZ = 0.0
-
-        while (reader.readLine().also { line = it.orEmpty() } != null) {
-            lineArr = line.trim().split("\\s+".toRegex())
-
-            if (lineArr.size > 3 && lineArr[0] == "v") {
-                x = lineArr[1].toFloat()
-                y = lineArr[2].toFloat()
-                z = lineArr[3].toFloat()
-                adjustMaxMin(x, y, z)
-                vertices.add(x)
-                vertices.add(y)
-                vertices.add(z)
-                centerMassX += x.toDouble()
-                centerMassY += y.toDouble()
-                centerMassZ += z.toDouble()
-            } else if (lineArr.size > 3 && lineArr[0] == "vn") {
-                x = lineArr[1].toFloat()
-                y = lineArr[2].toFloat()
-                z = lineArr[3].toFloat()
-                normalBucket.add(x)
-                normalBucket.add(y)
-                normalBucket.add(z)
-            } else if (lineArr.size > 3 && lineArr[0] == "f") {
-                if (lineArr.size == 4) {
-                    // it's a triangle
-                    parseInts(lineArr[1], intArr[0])
-                    parseInts(lineArr[2], intArr[1])
-                    parseInts(lineArr[3], intArr[2])
-                    index1 = intArr[0][0] - 1
-                    index2 = intArr[1][0] - 1
-                    index3 = intArr[2][0] - 1
-                    indices.add(index1)
-                    indices.add(index2)
-                    indices.add(index3)
-                    if (intArr[0][2] != -1) {
-                        normalIndices.add(intArr[0][2] - 1)
-                        normalIndices.add(intArr[1][2] - 1)
-                        normalIndices.add(intArr[2][2] - 1)
-                    } else {
-                        calculateNormal(vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
-                                vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2],
-                                vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
-                                customNormal)
-                        normalBucket.add(customNormal[0])
-                        normalBucket.add(customNormal[1])
-                        normalBucket.add(customNormal[2])
-                        normalIndices.add((normalBucket.size - 1) / 3)
-                        normalIndices.add((normalBucket.size - 1) / 3)
-                        normalIndices.add((normalBucket.size - 1) / 3)
-                    }
-                } else if (lineArr.size == 5) {
-                    // it's a quad
-                    parseInts(lineArr[1], intArr[0])
-                    parseInts(lineArr[2], intArr[1])
-                    parseInts(lineArr[3], intArr[2])
-                    parseInts(lineArr[4], intArr[3])
-                    index1 = intArr[0][0] - 1
-                    index2 = intArr[1][0] - 1
-                    index3 = intArr[2][0] - 1
-                    index4 = intArr[3][0] - 1
-                    indices.add(index1)
-                    indices.add(index2)
-                    indices.add(index3)
-                    indices.add(index1)
-                    indices.add(index3)
-                    indices.add(index4)
-                    if (intArr[0][2] != -1) {
-                        normalIndices.add(intArr[0][2] - 1)
-                        normalIndices.add(intArr[1][2] - 1)
-                        normalIndices.add(intArr[2][2] - 1)
-                        normalIndices.add(intArr[0][2] - 1)
-                        normalIndices.add(intArr[2][2] - 1)
-                        normalIndices.add(intArr[3][2] - 1)
-                    } else {
-                        calculateNormal(vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
-                                vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2],
-                                vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
-                                customNormal)
-                        normalBucket.add(customNormal[0])
-                        normalBucket.add(customNormal[1])
-                        normalBucket.add(customNormal[2])
-                        normalIndices.add((normalBucket.size - 1) / 3)
-                        normalIndices.add((normalBucket.size - 1) / 3)
-                        normalIndices.add((normalBucket.size - 1) / 3)
-                        calculateNormal(vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
-                                vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
-                                vertices[index4 * 3], vertices[index4 * 3 + 1], vertices[index4 * 3 + 2],
-                                customNormal)
-                        normalBucket.add(customNormal[0])
-                        normalBucket.add(customNormal[1])
-                        normalBucket.add(customNormal[2])
-                        normalIndices.add((normalBucket.size - 1) / 3)
-                        normalIndices.add((normalBucket.size - 1) / 3)
-                        normalIndices.add((normalBucket.size - 1) / 3)
-                    }
-                }
-            }
-            // TODO: Support texture coordinates ("vt")
+    override fun setup(boundSize: Float) {
+        if (GLES20.glIsProgram(glProgram)) {
+            GLES20.glDeleteProgram(glProgram)
+            glProgram = -1
         }
-
-        vertexCount = vertices.size / 3
-        this.centerMassX = (centerMassX / vertexCount).toFloat()
-        this.centerMassY = (centerMassY / vertexCount).toFloat()
-        this.centerMassZ = (centerMassZ / vertexCount).toFloat()
-
-        var vbb = ByteBuffer.allocateDirect(vertices.size * BYTES_PER_FLOAT)
-        vbb.order(ByteOrder.nativeOrder())
-        vertexBuffer = vbb.asFloatBuffer()
-        for (i in vertices.indices) {
-            vertexBuffer!!.put(vertices[i])
-        }
-        vertexBuffer!!.position(0)
-        indexCount = indices.size
-
-        vbb = ByteBuffer.allocateDirect(indexCount * BYTES_PER_INT)
-        vbb.order(ByteOrder.nativeOrder())
-        indexBuffer = vbb.asIntBuffer()
-        for (i in 0 until indexCount) {
-            indexBuffer!!.put(indices[i])
-        }
-        indexBuffer!!.position(0)
-
-        val normalArray = FloatArray(vertices.size)
-        var vi: Int
-        var ni: Int
-        for (i in 0 until indexCount) {
-            vi = indices[i]
-            ni = normalIndices[i]
-            normalArray[vi * 3] = normalBucket[ni * 3]
-            normalArray[vi * 3 + 1] = normalBucket[ni * 3 + 1]
-            normalArray[vi * 3 + 2] = normalBucket[ni * 3 + 2]
-        }
-        vbb = ByteBuffer.allocateDirect(normalArray.size * BYTES_PER_FLOAT)
-        vbb.order(ByteOrder.nativeOrder())
-        normalBuffer = vbb.asFloatBuffer()
-        normalBuffer!!.put(normalArray)
-        normalBuffer!!.position(0)
+        glProgram = Util.compileProgram(
+            R.raw.model_texture_load_vertex,
+            R.raw.model_texture_load_fragment,
+            arrayOf("aPosition", "aNormal", "aTexCoords")
+        )
+        initModelMatrix(boundSize)
     }
 
-    companion object {
-        // This is a method that takes a string and parses any integers out of it (in place, without
-        // using any additional string splitting, regexes, or int parsing), which provides a pretty
-        // significant speed gain.
-        // - The first three output integers are pre-initialized to -1.
-        // - The integers in the string are expected to be delimited by a single non-numeric character.
-        //   If a non-numeric character follows another non-numeric character, then an integer value
-        //   of -1 will be added to the output array.
-        fun parseInts(str: String, ints: IntArray) {
-            val len = str.length
-            var intIndex = 0
-            var currentInt = -1
-            ints[0] = -1
-            ints[1] = -1
-            ints[2] = -1
-            for (i in 0 until len) {
-                val c = str[i]
-                if (c in '0'..'9') {
-                    if (currentInt == -1) {
-                        currentInt = c - '0'
-                    } else {
-                        currentInt *= 10
-                        currentInt += c - '0'
+
+    private fun readObjectBean(objectBean: ObjectBean) {
+        objectBean.apply {
+            this@ObjModel.isMorethenOne = morethanOne
+            this@ObjModel.maxX = maxX
+            this@ObjModel.maxY = maxY
+            this@ObjModel.maxZ = maxZ
+            this@ObjModel.minX = minX
+            this@ObjModel.minY = minY
+            this@ObjModel.minZ = minZ
+            vertexCount = aVertices!!.size / 3
+            this.centerMassX = (centerMassX / vertexCount)
+            this.centerMassY = (centerMassY / vertexCount)
+            this.centerMassZ = (centerMassZ / vertexCount)
+
+            var vbb = ByteBuffer.allocateDirect(aVertices!!.size * BYTES_PER_FLOAT)
+            vbb.order(ByteOrder.nativeOrder())
+            vertexBuffer = vbb.asFloatBuffer()
+            vertexBuffer!!.put(aVertices!!)
+            vertexBuffer!!.position(0)
+
+            vbb = ByteBuffer.allocateDirect(aNormals!!.size * BYTES_PER_INT)
+            vbb.order(ByteOrder.nativeOrder())
+            normalBuffer = vbb.asFloatBuffer()
+            normalBuffer!!.put(aNormals)
+            normalBuffer!!.position(0)
+
+
+            vbb = ByteBuffer.allocateDirect(aTexCoords!!.size * BYTES_PER_INT)
+            vbb.order(ByteOrder.nativeOrder())
+            textCoorBuffer = vbb.asFloatBuffer()
+            textCoorBuffer!!.put(aTexCoords)
+            textCoorBuffer!!.position(0)
+        }
+    }
+
+    override fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray, light: Light) {
+        GLES20.glUseProgram(glProgram)
+        
+        val positionHandle = GLES20.glGetAttribLocation(glProgram, "aPosition")
+        val normalHandle = GLES20.glGetAttribLocation(glProgram, "aNormal")
+        val textHandle = GLES20.glGetAttribLocation(glProgram, "aTexCoords")
+
+        val mMVMatrixHandle = GLES20.glGetUniformLocation(glProgram, "uMVMatrix")
+        val mMVPMatrixHandle = GLES20.glGetUniformLocation(glProgram, "uMVPMatrix")
+        val mNormalPosHandle = GLES20.glGetUniformLocation(glProgram, "normalMatrix")
+
+        Matrix.multiplyMM(mvMatrix, 0, viewMatrix, 0, modelMatrix, 0)
+        GLES20.glUniformMatrix4fv(mMVMatrixHandle, 1, false, mvMatrix, 0)
+        Matrix.multiplyMM(mvpMatrix, 0, projectionMatrix, 0, mvMatrix, 0)
+        GLES20.glUniformMatrix4fv(mMVPMatrixHandle, 1, false, mvpMatrix, 0)
+
+        val normalMatrix = Matrix4f()
+        normalMatrix.loadMultiply(Matrix4f(viewMatrix), Matrix4f(modelMatrix))
+        normalMatrix.inverse()
+        normalMatrix.transpose()
+        GLES20.glUniformMatrix4fv(mNormalPosHandle, 1, false, normalMatrix.array, 0)
+
+        val materialAmbientPosHandle =
+            GLES20.glGetUniformLocation(glProgram, "material.ambient")
+        val materialDiffusePosHandle =
+            GLES20.glGetUniformLocation(glProgram, "material.diffuse")
+        val materialSpecularPosHandle =
+            GLES20.glGetUniformLocation(glProgram, "material.specular")
+        val materialShininessPosHandle =
+            GLES20.glGetUniformLocation(glProgram, "material.shininess")
+        val materialAlphaPosHandle = GLES20.glGetUniformLocation(glProgram, "material.alpha")
+
+        val lightPosHandle = GLES20.glGetUniformLocation(glProgram, "light.position")
+        val lightAmbientPosHandle = GLES20.glGetUniformLocation(glProgram, "light.ambient")
+        val lightDiffusePosHandle = GLES20.glGetUniformLocation(glProgram, "light.diffuse")
+        val lightSpecularPosHandle = GLES20.glGetUniformLocation(glProgram, "light.specular")
+        GLES20.glUniform3f(
+            lightPosHandle,
+            light.positionInEyeSpace[0],
+            light.positionInEyeSpace[0],
+            light.positionInEyeSpace[0]
+        )
+
+        GLES20.glEnableVertexAttribArray(positionHandle)
+        GLES20.glVertexAttribPointer(
+            positionHandle, 3, GLES20.GL_FLOAT,
+            false, 3 * 4, vertexBuffer
+        )
+        GLES20.glEnableVertexAttribArray(normalHandle)
+        GLES20.glVertexAttribPointer(
+            normalHandle, 3, GLES20.GL_FLOAT,
+            false, 3 * 4, normalBuffer
+        )
+        GLES20.glEnableVertexAttribArray(textHandle)
+        GLES20.glVertexAttribPointer(
+            textHandle, 2, GLES20.GL_FLOAT,
+            false, 2 * 4, textCoorBuffer
+        )
+
+        if (objectBean.mtl != null) {
+            GLES20.glUniform3f(
+                lightAmbientPosHandle,
+                0.5f * objectBean.mtl!!.Ka_Color[0],
+                0.5f * objectBean.mtl!!.Ka_Color[1],
+                0.5f * objectBean.mtl!!.Ka_Color[2]
+            )
+            GLES20.glUniform3f(
+                lightDiffusePosHandle,
+                0.6f * objectBean.mtl!!.Kd_Color[0],
+                0.6f * objectBean.mtl!!.Kd_Color[1],
+                0.6f * objectBean.mtl!!.Kd_Color[2]
+            )
+            GLES20.glUniform3f(lightSpecularPosHandle,
+                0.6f * objectBean.mtl!!.Ks_Color[0],
+                0.6f * objectBean.mtl!!.Ks_Color[1],
+                0.6f * objectBean.mtl!!.Ks_Color[2])
+
+            if (!TextUtils.isEmpty(objectBean.mtl?.Kd_Texture)) {
+                if (objectBean.diffuse < 0) {
+                    try {
+                        val bitmap = BitmapFactory.decodeStream(
+                            ModelViewerApplication.instance.assets.open(
+                                fileName + "/" + objectBean.mtl!!.Kd_Texture
+                            )
+                        )
+                        objectBean.diffuse = Util.createTextureNormal(bitmap,false)
+                        bitmap.recycle()
+                    } catch (e: IOException) {
+                        LogUtil.e(e)
+                    }
+                }
+            } else {
+                if (objectBean.diffuse < 0) {
+                    val bitmap = BitmapFactory.decodeResource(
+                        ModelViewerApplication.instance.resources,
+                        R.drawable.ic_default_texture
+                    )
+                    objectBean.diffuse = Util.createTextureNormal(bitmap,false)
+                    bitmap.recycle()
+                }
+            }
+            if (TextUtils.equals(objectBean.mtl!!.Kd_Texture, objectBean.mtl!!.Ka_Texture)) {
+                // 相同
+                objectBean.ambient = objectBean.diffuse
+            } else {
+                if (!TextUtils.isEmpty(objectBean.mtl!!.Ka_Texture)) {
+                    if (objectBean.ambient < 0) {
+                        try {
+                            val bitmap = BitmapFactory.decodeStream(
+                                ModelViewerApplication.instance.assets.open(
+                                    fileName + "/" + objectBean.mtl!!.Ka_Texture
+                                )
+                            )
+                            objectBean.ambient = Util.createTextureNormal(bitmap,false)
+                            bitmap.recycle()
+                        } catch (e: IOException) {
+                            LogUtil.e(e)
+                        }
                     }
                 } else {
-                    if (currentInt >= 0) {
-                        ints[intIndex++] = currentInt
-                        currentInt = -1
-                    } else {
-                        ints[intIndex++] = -1
+                    if (objectBean.ambient < 0) {
+                        val bitmap = BitmapFactory.decodeResource(
+                            ModelViewerApplication.instance.resources,
+                            R.drawable.ic_default_texture
+                        )
+                        objectBean.ambient = Util.createTextureNormal(bitmap,false)
+                        bitmap.recycle()
                     }
                 }
             }
-            if (currentInt >= 0) {
-                ints[intIndex] = currentInt
+            Util.bindTexture(materialAmbientPosHandle, objectBean.ambient, 0)
+            Util.bindTexture(materialDiffusePosHandle, objectBean.diffuse, 0)
+            if (!TextUtils.isEmpty(objectBean.mtl!!.Ks_Texture)) {
+                if (objectBean.specular < 0) {
+                    try {
+                        val bitmap = BitmapFactory.decodeStream(
+                            ModelViewerApplication.instance.assets.open(
+                                fileName + "/" + objectBean.mtl!!.Ks_Texture
+                            )
+                        )
+                        objectBean.specular = Util.createTextureNormal(bitmap,false)
+                        bitmap.recycle()
+                    } catch (e: IOException) {
+                        LogUtil.e(e)
+                    }
+                }
+            } else {
+                if (objectBean.specular < 0) {
+                    val bitmap = BitmapFactory.decodeResource(
+                        ModelViewerApplication.instance.resources,
+                        R.drawable.ic_default_texture
+                    )
+                    objectBean.specular = Util.createTextureNormal(bitmap,false)
+                    bitmap.recycle()
+                }
             }
+            Util.bindTexture(materialSpecularPosHandle, objectBean.specular, 1)
+            GLES20.glUniform1f(materialAlphaPosHandle, objectBean.mtl!!.alpha)
+            GLES20.glUniform1f(materialShininessPosHandle, objectBean.mtl!!.ns)
         }
+        // draw vertices
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, objectBean.aVertices!!.size / 3)
     }
 }

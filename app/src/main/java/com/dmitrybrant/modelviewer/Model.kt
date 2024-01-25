@@ -36,6 +36,7 @@ abstract class Model {
 
     protected var mvMatrix = FloatArray(16)
     protected var mvpMatrix = FloatArray(16)
+    protected var isMorethenOne = false
 
     protected var maxX = Float.MIN_VALUE
     protected var maxY = Float.MIN_VALUE
@@ -57,7 +58,11 @@ abstract class Model {
         Matrix.rotateM(modelMatrix, 0, rotateX, 1.0f, 0.0f, 0.0f)
         Matrix.rotateM(modelMatrix, 0, rotateY, 0.0f, 1.0f, 0.0f)
         Matrix.rotateM(modelMatrix, 0, rotateZ, 0.0f, 0.0f, 1.0f)
-        scaleModelMatrixToBounds(boundSize)
+        if(!isMorethenOne) {
+            scaleModelMatrixToBounds(boundSize)
+        }else{
+            setScal()
+        }
         Matrix.translateM(modelMatrix, 0, -centerMassX, -centerMassY, -centerMassZ)
     }
 
@@ -104,5 +109,9 @@ abstract class Model {
             scale = 1f / scale
             Matrix.scaleM(modelMatrix, 0, scale, scale, scale)
         }
+    }
+
+    fun setScal() {
+        Matrix.scaleM(modelMatrix, 0, 6f, 6f, 6f)
     }
 }

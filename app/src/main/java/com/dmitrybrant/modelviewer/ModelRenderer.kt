@@ -3,6 +3,7 @@ package com.dmitrybrant.modelviewer
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.opengl.Matrix
+import com.dmitrybrant.modelviewer.obj.ObjModel
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
@@ -21,7 +22,7 @@ import javax.microedition.khronos.opengles.GL10
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-class ModelRenderer(private val model: Model?) : GLSurfaceView.Renderer {
+class ModelRenderer(private val model: MutableList<Model>?) : GLSurfaceView.Renderer {
     private val light = Light(floatArrayOf(0.0f, 0.0f, MODEL_BOUND_SIZE * 10, 1.0f))
     private val floor = Floor()
 
@@ -61,7 +62,10 @@ class ModelRenderer(private val model: Model?) : GLSurfaceView.Renderer {
     override fun onDrawFrame(unused: GL10) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
         floor.draw(viewMatrix, projectionMatrix, light)
-        model?.draw(viewMatrix, projectionMatrix, light)
+        if (!model.isNullOrEmpty())
+            for (item in model) {
+                item.draw(viewMatrix, projectionMatrix, light)
+            }
     }
 
     override fun onSurfaceChanged(unused: GL10, width: Int, height: Int) {
@@ -81,8 +85,8 @@ class ModelRenderer(private val model: Model?) : GLSurfaceView.Renderer {
         light.applyViewMatrix(viewMatrix)
 
         // By default, rotate the model towards the user a bit
-        rotateAngleX = -15.0f
-        rotateAngleY = 15.0f
+        rotateAngleX = -28.0f
+        rotateAngleY = 28.0f
         updateViewMatrix()
     }
 
@@ -94,10 +98,13 @@ class ModelRenderer(private val model: Model?) : GLSurfaceView.Renderer {
         //GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
 
         floor.setup(MODEL_BOUND_SIZE)
-        model?.let {
-            it.setup(MODEL_BOUND_SIZE)
-            floor.setOffsetY(it.floorOffset)
-        }
+        if (!model.isNullOrEmpty())
+            for (item in model)
+                item.let {
+                    it.setup(MODEL_BOUND_SIZE)
+                    if (item !is ObjModel)
+                        floor.setOffsetY(it.floorOffset)
+                }
     }
 
     companion object {

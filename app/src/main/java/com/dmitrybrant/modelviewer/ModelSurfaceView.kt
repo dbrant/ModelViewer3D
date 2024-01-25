@@ -22,7 +22,7 @@ import kotlin.math.sqrt
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-class ModelSurfaceView(context: Context, model: Model?) : GLSurfaceView(context) {
+class ModelSurfaceView(context: Context, model: MutableList<Model>?) : GLSurfaceView(context) {
     private val renderer: ModelRenderer
     private var previousX = 0f
     private var previousY = 0f
