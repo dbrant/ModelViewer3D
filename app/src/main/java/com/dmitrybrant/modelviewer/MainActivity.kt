@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.CancellationSignal
 import android.provider.MediaStore
 import android.view.Menu
 import android.view.MenuItem
@@ -238,7 +239,7 @@ class MainActivity : AppCompatActivity() {
     private fun getFileName(cr: ContentResolver, uri: Uri): String? {
         if ("content" == uri.scheme) {
             val projection = arrayOf(MediaStore.MediaColumns.DISPLAY_NAME)
-            ContentResolverCompat.query(cr, uri, projection, null, null, null, null)?.use { metaCursor ->
+            ContentResolverCompat.query(cr, uri, projection, null, null, null, null as CancellationSignal?)?.use { metaCursor ->
                 if (metaCursor.moveToFirst()) {
                     return metaCursor.getString(0)
                 }
