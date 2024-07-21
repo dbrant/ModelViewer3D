@@ -1,0 +1,19 @@
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    commit-message:
+      prefix: "Gradle"
+    directory: "/" 
+    schedule:
+      day: "sunday"
+      interval: "weekly"
+      time: "07:00"
+
+  - package-ecosystem: "gradle"
+    commit-message:
+      prefix: "Gradle"
+    directory: "/app"
+    schedule:
+      day: "sunday"
+      interval: "weekly"
+      time: "07:00"
