@@ -14,7 +14,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:padding="16dp"
-        android:layout_gravity="top|end"/>
+        android:layout_gravity="bottom|start"/>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/actionButton"
@@ -26,5 +26,11 @@
         app:tint="@android:color/white"
         app:srcCompat="@drawable/ic_google_cardboard"
         android:contentDescription="@null" />
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/mainToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top" />
 
 </FrameLayout>

@@ -13,13 +13,16 @@ import android.provider.MediaStore
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import android.widget.FrameLayout
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContentResolverCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updateLayoutParams
+import androidx.core.view.updatePadding
 import com.dmitrybrant.modelviewer.databinding.ActivityMainBinding
 import com.dmitrybrant.modelviewer.gvr.ModelGvrActivity
 import com.dmitrybrant.modelviewer.obj.ObjModel
@@ -80,24 +83,28 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        setSupportActionBar(binding.mainToolbar)
 
         binding.progressBar.visibility = View.GONE
         binding.actionButton.setOnClickListener { startVrActivity() }
 
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.containerView)) { _, insets ->
-            (binding.actionButton.layoutParams as FrameLayout.LayoutParams).apply {
-                topMargin = insets.systemWindowInsetTop
-                bottomMargin = insets.systemWindowInsetBottom
-                leftMargin = insets.systemWindowInsetLeft
-                rightMargin = insets.systemWindowInsetRight
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val statusBarInsets = insets.getInsets(WindowInsetsCompat.Type.statusBars())
+            val navBarInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+
+            binding.mainToolbar.updatePadding(top = statusBarInsets.top)
+            binding.actionButton.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                bottomMargin = navBarInsets.bottom
+                leftMargin = navBarInsets.left
+                rightMargin = navBarInsets.right
             }
-            (binding.progressBar.layoutParams as FrameLayout.LayoutParams).apply {
-                topMargin = insets.systemWindowInsetTop
-                bottomMargin = insets.systemWindowInsetBottom
-                leftMargin = insets.systemWindowInsetLeft
-                rightMargin = insets.systemWindowInsetRight
+            binding.progressBar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                bottomMargin = navBarInsets.bottom
+                leftMargin = navBarInsets.left
+                rightMargin = navBarInsets.right
             }
-            insets.consumeSystemWindowInsets()
+
+            WindowInsetsCompat.CONSUMED
         }
 
         sampleModels = assets.list("")!!.filter { it.endsWith(".stl") }
