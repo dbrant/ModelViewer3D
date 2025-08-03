@@ -54,5 +54,5 @@ dependencies {
     implementation "io.reactivex.rxjava3:rxandroid:3.0.2"
 
     testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.7.0'
 }
