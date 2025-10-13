@@ -1,7 +1,6 @@
 package com.dmitrybrant.modelviewer
 
 import android.Manifest
-import android.app.Activity
 import android.content.ContentResolver
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -40,6 +39,7 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
 import java.util.*
+import kotlin.math.max
 
 /*
 * Copyright 2017-2022 Dmitry Brant. All rights reserved.
@@ -64,7 +64,7 @@ class MainActivity : AppCompatActivity() {
     private val disposables = CompositeDisposable()
 
     private val openDocumentLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (it.resultCode == Activity.RESULT_OK && it.data?.data != null) {
+        if (it.resultCode == RESULT_OK && it.data?.data != null) {
             val uri = it.data?.data
             grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             beginLoadModel(uri!!)
@@ -89,22 +89,24 @@ class MainActivity : AppCompatActivity() {
         binding.actionButton.setOnClickListener { startVrActivity() }
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
-            val statusBarInsets = insets.getInsets(WindowInsetsCompat.Type.statusBars())
-            val navBarInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
-
-            binding.mainToolbar.updatePadding(top = statusBarInsets.top)
+            val newStatusBarInsets = insets.getInsets(WindowInsetsCompat.Type.statusBars())
+            val newNavBarInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            val newCaptionBarInsets = insets.getInsets(WindowInsetsCompat.Type.captionBar())
+            val newSystemBarInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val topInset = max(max(max(newStatusBarInsets.top, newCaptionBarInsets.top), newSystemBarInsets.top), newNavBarInsets.top)
+            val bottomInset = max(max(max(newStatusBarInsets.bottom, newCaptionBarInsets.bottom), newSystemBarInsets.bottom), newNavBarInsets.bottom)
+            binding.mainToolbarContainer.updatePadding(top = topInset)
             binding.actionButton.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                bottomMargin = navBarInsets.bottom
-                leftMargin = navBarInsets.left
-                rightMargin = navBarInsets.right
+                bottomMargin = bottomInset
+                leftMargin = newNavBarInsets.left
+                rightMargin = newNavBarInsets.right
             }
             binding.progressBar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                bottomMargin = navBarInsets.bottom
-                leftMargin = navBarInsets.left
-                rightMargin = navBarInsets.right
+                bottomMargin = bottomInset
+                leftMargin = newNavBarInsets.left
+                rightMargin = newNavBarInsets.right
             }
-
-            WindowInsetsCompat.CONSUMED
+            insets
         }
 
         sampleModels = assets.list("")!!.filter { it.endsWith(".stl") }
@@ -197,7 +199,7 @@ class MainActivity : AppCompatActivity() {
                     val response = client.newCall(request).execute()
 
                     // TODO: figure out how to NOT need to read the whole file at once.
-                    ByteArrayInputStream(response.body!!.bytes())
+                    ByteArrayInputStream(response.body.bytes())
                 } else {
                     cr.openInputStream(uri)
                 }
