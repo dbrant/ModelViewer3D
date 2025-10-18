@@ -10,6 +10,7 @@
         <item name="android:windowTranslucentNavigation">true</item>
         <item name="android:statusBarColor">@color/colorPrimary</item>
 
+        <item name="colorControlNormal">@color/colorToolbarContents</item>
         <item name="toolbarStyle">@style/ToolbarStyle</item>
         <item name="popupMenuStyle">@style/PopupMenuStyle</item>
     </style>
@@ -19,8 +20,14 @@
         <item name="windowNoTitle">true</item>
     </style>
 
+    <style name="ToolbarTitleAppearance" parent="TextAppearance.Material3.ActionBar.Title">
+        <item name="android:textColor">@color/colorToolbarContents</item>
+    </style>
+
     <style name="ToolbarStyle" parent="Widget.Material3.Toolbar">
         <item name="android:background">@color/colorPrimary</item>
+        <item name="colorButtonNormal">@color/colorToolbarContents</item>
+        <item name="titleTextAppearance">@style/ToolbarTitleAppearance</item>
     </style>
 
     <style name="PopupMenuStyle" parent="Widget.Material3.PopupMenu">

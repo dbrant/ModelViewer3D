@@ -5,4 +5,5 @@
     <color name="colorPrimaryLight">#5F71B5</color>
     <color name="colorAccent">#FF4081</color>
     <color name="colorWindowBackground">#333</color>
+    <color name="colorToolbarContents">#FFF</color>
 </resources>
