@@ -1,13 +1,12 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
 
 android {
     compileSdk = 36
     defaultConfig {
         applicationId "com.dmitrybrant.modelviewer"
-        minSdk = 21
+        minSdk = 23
         targetSdk = 36
         versionCode = 24
         multiDexEnabled = true
