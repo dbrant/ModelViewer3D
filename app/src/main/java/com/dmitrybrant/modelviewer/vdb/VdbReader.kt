@@ -1,5 +1,6 @@
 package com.dmitrybrant.modelviewer.vdb
 
+import com.dmitrybrant.modelviewer.util.IntList
 import com.dmitrybrant.modelviewer.util.Util
 import java.io.BufferedInputStream
 import java.io.EOFException
@@ -12,7 +13,8 @@ import java.util.zip.Inflater
 
 /*
 * Reader for OpenVDB (.vdb) files. Reads the first scalar (float or double) grid in the file,
-* which is enough for visualizing level sets and fog volumes.
+* which is enough for visualizing level sets and fog volumes, and a vector grid with the color
+* of the volume, if there is one.
 *
 * The stream is read strictly sequentially, so it doesn't need to support seeking.
 *
@@ -39,17 +41,27 @@ class VdbReader(inputStream: InputStream) {
 
     private var compression = 0
     private var valueSize = 4
+    private var components = 1
     private var isHalf = false
-    private var background = 0f
+    private var background = FloatArray(1)
     private var byteBuffer = ByteArray(0x1000)
     private var compressedBuffer = ByteArray(0x1000)
     private var inflater: Inflater? = null
     private val blosc = Blosc()
 
+    /** The grids that were read from a file. */
+    class Grids(val surface: VdbGrid, val color: VdbGrid?)
+
     /**
-     * Reads the first supported grid in the file.
+     * Reads the first scalar grid in the file.
      */
-    fun readGrid(): VdbGrid {
+    fun readGrid() = read().surface
+
+    /**
+     * Reads the first scalar grid in the file, and a vector grid that holds the colors of the
+     * volume (with a name like "Cd" or "color"), if there is one.
+     */
+    fun read(): Grids {
         try {
             if (stream.readLong() != MAGIC) {
                 throw IOException("Not a valid OpenVDB file.")
@@ -69,6 +81,8 @@ class VdbReader(inputStream: InputStream) {
 
             val gridCount = stream.readInt()
             val skippedTypes = mutableListOf<String>()
+            var surface: VdbGrid? = null
+            var color: VdbGrid? = null
             for (i in 0 until gridCount) {
                 // The unique name may have a suffix that disambiguates grids with the same name.
                 val name = stream.readString().substringBefore('\u001e')
@@ -80,21 +94,28 @@ class VdbReader(inputStream: InputStream) {
                 stream.readLong() // block position
                 val endPos = stream.readLong()
 
-                // Grid types look like "Tree_float_5_4_3", which means a float grid with
-                // internal nodes of log2 dimension 5 and 4, and leaf nodes of log2 dimension 3.
-                val typeParts = gridType.split("_")
-                val log2Dims = typeParts.drop(2).mapNotNull { it.toIntOrNull() }
-                val isSupported = typeParts.size > 2 && typeParts[0] == "Tree" &&
-                        (typeParts[1] == "float" || typeParts[1] == "double") &&
-                        log2Dims.size == typeParts.size - 2 && log2Dims.size >= 2 &&
-                        log2Dims.all { it in 2..7 } && instanceParent.isEmpty()
-
-                if (isSupported) {
-                    valueSize = if (typeParts[1] == "double") 8 else 4
+                val type = parseGridType(gridType)
+                val isSurface = surface == null && type?.components == 1
+                val isColor = color == null && type?.components == 3 && name.lowercase() in COLOR_GRID_NAMES
+                if (type != null && instanceParent.isEmpty() && (isSurface || isColor)) {
                     if (hasGridOffsets) {
                         stream.seek(gridPos)
                     }
-                    return readGrid(name, log2Dims)
+                    valueSize = type.valueSize
+                    components = type.components
+                    val grid = readGrid(name, type.log2Dims)
+                    if (isSurface) {
+                        surface = grid
+                    } else {
+                        color = grid
+                    }
+                    if (surface != null && color != null) {
+                        break
+                    }
+                    if (hasGridOffsets) {
+                        stream.seek(endPos)
+                    }
+                    continue
                 }
                 skippedTypes.add(gridType)
                 if (!hasGridOffsets) {
@@ -103,8 +124,8 @@ class VdbReader(inputStream: InputStream) {
                 }
                 stream.seek(endPos)
             }
-            throw IOException("No supported grids found in file. Only float and double grids are supported" +
-                    (if (skippedTypes.isNotEmpty()) " (found: ${skippedTypes.joinToString()})." else "."))
+            return Grids(surface ?: throw IOException("No supported grids found in file. Only float and double grids " +
+                    "are supported" + (if (skippedTypes.isNotEmpty()) " (found: ${skippedTypes.joinToString()})." else ".")), color)
         } finally {
             inflater?.end()
         }
@@ -120,7 +141,7 @@ class VdbReader(inputStream: InputStream) {
         stream.readInt()
 
         // Root node
-        background = readValue()
+        background = readValues()
         val numTiles = stream.readInt()
         val numChildren = stream.readInt()
         if (numTiles < 0 || numChildren < 0) {
@@ -134,12 +155,12 @@ class VdbReader(inputStream: InputStream) {
         }
         val rootChildLog2 = totalLog2[0]
 
-        val rootTiles = HashMap<Long, Float>()
+        val rootTiles = HashMap<Long, FloatArray>()
         for (i in 0 until numTiles) {
             val x = stream.readInt()
             val y = stream.readInt()
             val z = stream.readInt()
-            val value = readValue()
+            val value = readValues()
             stream.readByte() // active state
             rootTiles[VdbGrid.packKey(x shr rootChildLog2, y shr rootChildLog2, z shr rootChildLog2)] = value
         }
@@ -164,7 +185,7 @@ class VdbReader(inputStream: InputStream) {
         var maxValue = -Float.MAX_VALUE
         for (leaf in 0 until numLeaves) {
             readMask(valueMask)
-            val values = FloatArray(leafSize)
+            val values = FloatArray(leafSize * components)
             readCompressedValues(values, leafSize, valueMask)
             for (v in values) {
                 if (v < minValue) minValue = v
@@ -176,14 +197,14 @@ class VdbReader(inputStream: InputStream) {
             leaves[VdbGrid.packKey(x shr leafLog2, y shr leafLog2, z shr leafLog2)] = values
         }
         if (numLeaves == 0) {
-            minValue = background
-            maxValue = background
+            minValue = background.min()
+            maxValue = background.max()
         }
 
         val internalLevels = (log2Dims.size - 2 downTo 0).map {
             VdbGrid.InternalLevel(log2Dims[it], totalLog2[it], internalNodes[it])
         }
-        return VdbGrid(name, gridClass, background, transform, leafLog2, internalLevels, rootTiles,
+        return VdbGrid(name, gridClass, components, background, transform, leafLog2, internalLevels, rootTiles,
             rootChildLog2, leaves, minValue, maxValue)
     }
 
@@ -196,7 +217,7 @@ class VdbReader(inputStream: InputStream) {
         val valueMask = LongArray(numValues / 64)
         readMask(childMask)
         readMask(valueMask)
-        val values = FloatArray(numValues)
+        val values = FloatArray(numValues * components)
         readCompressedValues(values, numValues, valueMask)
         val nodeLog2 = totalLog2[level]
         checkCoordRange(originX shr nodeLog2, originY shr nodeLog2, originZ shr nodeLog2)
@@ -233,20 +254,21 @@ class VdbReader(inputStream: InputStream) {
     }
 
     /**
-     * Reads a node's values, which may be compressed, and may omit inactive values that can be
-     * reconstructed from the value mask. See readCompressedValues() in OpenVDB's io/Compression.h
+     * Reads a node's values (each with [components] floats), which may be compressed, and may omit
+     * inactive values that can be reconstructed from the value mask.
+     * See readCompressedValues() in OpenVDB's io/Compression.h
      */
     private fun readCompressedValues(dest: FloatArray, count: Int, valueMask: LongArray) {
         val maskCompressed = compression and COMPRESS_ACTIVE_MASK != 0
         val metadata = stream.readByte()
 
-        var inactiveVal0 = if (metadata == NO_MASK_OR_INACTIVE_VALS) background else -background
+        var inactiveVal0 = if (metadata == NO_MASK_OR_INACTIVE_VALS) background else FloatArray(components) { -background[it] }
         var inactiveVal1 = background
         if (metadata == NO_MASK_AND_ONE_INACTIVE_VAL || metadata == MASK_AND_ONE_INACTIVE_VAL ||
             metadata == MASK_AND_TWO_INACTIVE_VALS) {
-            inactiveVal0 = readValue()
+            inactiveVal0 = readValues()
             if (metadata == MASK_AND_TWO_INACTIVE_VALS) {
-                inactiveVal1 = readValue()
+                inactiveVal1 = readValues()
             }
         }
 
@@ -265,16 +287,19 @@ class VdbReader(inputStream: InputStream) {
                 activeCount += java.lang.Long.bitCount(word)
             }
             readData(dest, activeCount)
+            // Going backward, an active value is never moved over one that hasn't been moved yet.
+            val c = components
             var activeIndex = activeCount - 1
             for (i in count - 1 downTo 0) {
                 val word = i shr 6
                 val bit = 1L shl (i and 63)
-                dest[i] = if (valueMask[word] and bit != 0L) {
-                    dest[activeIndex--]
+                if (valueMask[word] and bit != 0L) {
+                    dest.copyInto(dest, i * c, activeIndex * c, activeIndex * c + c)
+                    activeIndex--
                 } else if (selectionMask != null && selectionMask[word] and bit != 0L) {
-                    inactiveVal1
+                    inactiveVal1.copyInto(dest, i * c)
                 } else {
-                    inactiveVal0
+                    inactiveVal0.copyInto(dest, i * c)
                 }
             }
         } else {
@@ -282,13 +307,17 @@ class VdbReader(inputStream: InputStream) {
         }
     }
 
+    /**
+     * Reads [count] values (each with [components] floats) into the destination array.
+     */
     private fun readData(dest: FloatArray, count: Int) {
         if (isHalf && count == 0) {
             // Empty arrays of half-float values are not written at all.
             return
         }
         val elementSize = if (isHalf) 2 else valueSize
-        val numBytes = count * elementSize
+        val numFloats = count * components
+        val numBytes = numFloats * elementSize
         if (byteBuffer.size < numBytes) {
             byteBuffer = ByteArray(numBytes)
         }
@@ -320,17 +349,17 @@ class VdbReader(inputStream: InputStream) {
 
         when {
             isHalf -> {
-                for (i in 0 until count) {
+                for (i in 0 until numFloats) {
                     dest[i] = halfToFloat(Util.readShortLe(byteBuffer, i * 2))
                 }
             }
             valueSize == 8 -> {
-                for (i in 0 until count) {
+                for (i in 0 until numFloats) {
                     dest[i] = java.lang.Double.longBitsToDouble(Util.readLongLe(byteBuffer, i * 8)).toFloat()
                 }
             }
             else -> {
-                ByteBuffer.wrap(byteBuffer, 0, numBytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(dest, 0, count)
+                ByteBuffer.wrap(byteBuffer, 0, numBytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(dest, 0, numFloats)
             }
         }
     }
@@ -359,8 +388,32 @@ class VdbReader(inputStream: InputStream) {
     /**
      * Reads a single value of the grid's type, which is never stored as half-float.
      */
-    private fun readValue(): Float {
-        return if (valueSize == 8) stream.readDouble().toFloat() else stream.readFloat()
+    private fun readValues(): FloatArray {
+        return FloatArray(components) { if (valueSize == 8) stream.readDouble().toFloat() else stream.readFloat() }
+    }
+
+    private class GridType(val valueSize: Int, val components: Int, val log2Dims: List<Int>)
+
+    /**
+     * Parses a grid type such as "Tree_float_5_4_3", which means a float grid with internal nodes of
+     * log2 dimension 5 and 4, and leaf nodes of log2 dimension 3. Returns null if the type isn't supported.
+     */
+    private fun parseGridType(gridType: String): GridType? {
+        val typeParts = gridType.split("_")
+        if (typeParts.size < 3 || typeParts[0] != "Tree") {
+            return null
+        }
+        val log2Dims = typeParts.drop(2).mapNotNull { it.toIntOrNull() }
+        if (log2Dims.size != typeParts.size - 2 || log2Dims.size < 2 || log2Dims.any { it !in 2..7 }) {
+            return null
+        }
+        return when (typeParts[1]) {
+            "float" -> GridType(4, 1, log2Dims)
+            "double" -> GridType(8, 1, log2Dims)
+            "vec3s" -> GridType(4, 3, log2Dims)
+            "vec3d" -> GridType(8, 3, log2Dims)
+            else -> null
+        }
     }
 
     private fun readMask(mask: LongArray) {
@@ -512,21 +565,6 @@ class VdbReader(inputStream: InputStream) {
         }
     }
 
-    private class IntList {
-        private var array = IntArray(1024)
-        var size = 0
-            private set
-
-        fun add(value: Int) {
-            if (size == array.size) {
-                array = array.copyOf(size * 2)
-            }
-            array[size++] = value
-        }
-
-        operator fun get(index: Int) = array[index]
-    }
-
     companion object {
         private const val MAGIC = 0x56444220L
         private const val MIN_FILE_VERSION = 222
@@ -534,6 +572,9 @@ class VdbReader(inputStream: InputStream) {
         private const val MAX_STRING_LENGTH = 0x100000
         private const val MAX_COMPRESSED_SIZE = 0x10000000L
         private const val MAX_NODE_COORD = 1 shl 20
+
+        /** Names of vector grids that hold the colors of a volume (lowercase). */
+        private val COLOR_GRID_NAMES = setOf("cd", "color", "colour", "albedo")
 
         private const val COMPRESS_ZIP = 0x1
         private const val COMPRESS_ACTIVE_MASK = 0x2

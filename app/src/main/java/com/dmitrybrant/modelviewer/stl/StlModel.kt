@@ -1,6 +1,6 @@
 package com.dmitrybrant.modelviewer.stl
 
-import com.dmitrybrant.modelviewer.ArrayModel
+import com.dmitrybrant.modelviewer.MeshModel
 import com.dmitrybrant.modelviewer.util.Util
 import com.dmitrybrant.modelviewer.util.Util.calculateNormal
 import java.io.*
@@ -10,8 +10,11 @@ import java.util.regex.Pattern
 
 /*
 * Info on the STL format: https://en.wikipedia.org/wiki/STL_(file_format)
+* Binary STL files may have per-facet colors, which are not part of the standard, but are stored
+* in the unused "attribute" field of each facet in one of two ways, by VisCAM/SolidView or by
+* Materialise Magics (as described in the above article).
 *
-* Copyright 2017-2018 Dmitry Brant. All rights reserved.
+* Copyright 2017-2026 Dmitry Brant. All rights reserved.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -25,7 +28,7 @@ import java.util.regex.Pattern
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-class StlModel(inputStream: InputStream) : ArrayModel() {
+class StlModel(inputStream: InputStream) : MeshModel() {
     init {
         val stream = BufferedInputStream(inputStream, INPUT_BUFFER_SIZE)
         stream.mark(ASCII_TEST_SIZE)
@@ -131,7 +134,9 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
     private fun readBinary(inputStream: BufferedInputStream) {
         val chunkSize = 50
         val tempBytes = ByteArray(chunkSize)
-        inputStream.skip(HEADER_SIZE.toLong())
+        val header = ByteArray(HEADER_SIZE)
+        inputStream.read(header, 0, HEADER_SIZE)
+        val objectColor = readObjectColor(header)
         inputStream.read(tempBytes, 0, BYTES_PER_FLOAT)
 
         val vectorSize: Int = Util.readIntLe(tempBytes, 0)
@@ -151,8 +156,26 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
         var vertexPtr = 0
         var normalPtr = 0
         var haveNormals = false
+        var colorArray: FloatArray? = null
+        val facetColor = FloatArray(4)
         for (i in 0 until vectorSize) {
             inputStream.read(tempBytes, 0, tempBytes.size)
+            if (readFacetColor(Util.readShortLe(tempBytes, 48), objectColor, facetColor)) {
+                if (colorArray == null) {
+                    // Facets without their own color, before this one, get the default color.
+                    colorArray = FloatArray(vertexCount * 4)
+                    for (j in 0 until i * 3) {
+                        DEFAULT_FACET_COLOR.copyInto(colorArray, j * 4)
+                    }
+                }
+                for (j in 0 until 3) {
+                    facetColor.copyInto(colorArray, (i * 3 + j) * 4)
+                }
+            } else if (colorArray != null) {
+                for (j in 0 until 3) {
+                    DEFAULT_FACET_COLOR.copyInto(colorArray, (i * 3 + j) * 4)
+                }
+            }
             x = java.lang.Float.intBitsToFloat(Util.readIntLe(tempBytes, 0))
             y = java.lang.Float.intBitsToFloat(Util.readIntLe(tempBytes, 4))
             z = java.lang.Float.intBitsToFloat(Util.readIntLe(tempBytes, 8))
@@ -237,10 +260,60 @@ class StlModel(inputStream: InputStream) : ArrayModel() {
         normalBuffer = vbb.asFloatBuffer()
         normalBuffer!!.put(normalArray)
         normalBuffer!!.position(0)
+
+        colorBuffer = colorArray?.let { allocateFloats(it) }
+    }
+
+    /**
+     * Returns the color of the whole object, which Materialise Magics stores in the header as
+     * "COLOR=" followed by RGBA bytes, optionally followed by ",MATERIAL=" and RGBA bytes for the
+     * diffuse, specular, and ambient colors (which take precedence). Returns null if there's no such color.
+     */
+    private fun readObjectColor(header: ByteArray): FloatArray? {
+        val text = String(header, Charsets.ISO_8859_1)
+        val colorPos = text.indexOf("COLOR=")
+        if (colorPos < 0 || colorPos + 10 > header.size) {
+            return null
+        }
+        var pos = colorPos + 6
+        val materialPos = text.indexOf(",MATERIAL=", colorPos + 10)
+        if (materialPos >= 0 && materialPos + 14 <= header.size) {
+            pos = materialPos + 10
+        }
+        return floatArrayOf((header[pos].toInt() and 0xff) / 255f, (header[pos + 1].toInt() and 0xff) / 255f,
+            (header[pos + 2].toInt() and 0xff) / 255f, 1f)
+    }
+
+    /**
+     * Reads the color of a facet from its attribute field, and returns false if it doesn't have one.
+     */
+    private fun readFacetColor(attribute: Int, objectColor: FloatArray?, color: FloatArray): Boolean {
+        if (objectColor != null) {
+            // Magics: the top bit is clear if the facet has its own color, with red in the lowest bits.
+            if (attribute and 0x8000 == 0) {
+                color[0] = (attribute and 0x1f) / 31f
+                color[1] = ((attribute shr 5) and 0x1f) / 31f
+                color[2] = ((attribute shr 10) and 0x1f) / 31f
+                color[3] = 1f
+            } else {
+                objectColor.copyInto(color)
+            }
+            return true
+        }
+        // VisCAM/SolidView: the top bit is set if the facet has a color, with blue in the lowest bits.
+        if (attribute and 0x8000 != 0) {
+            color[0] = ((attribute shr 10) and 0x1f) / 31f
+            color[1] = ((attribute shr 5) and 0x1f) / 31f
+            color[2] = (attribute and 0x1f) / 31f
+            color[3] = 1f
+            return true
+        }
+        return false
     }
 
     companion object {
         private const val HEADER_SIZE = 80
         private const val ASCII_TEST_SIZE = 256
+        private val DEFAULT_FACET_COLOR = floatArrayOf(0.8f, 0.8f, 0.8f, 1f)
     }
 }

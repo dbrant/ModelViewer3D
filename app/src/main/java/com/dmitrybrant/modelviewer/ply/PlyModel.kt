@@ -2,7 +2,7 @@ package com.dmitrybrant.modelviewer.ply
 
 import android.opengl.GLES20
 import android.opengl.Matrix
-import com.dmitrybrant.modelviewer.IndexedModel
+import com.dmitrybrant.modelviewer.MeshModel
 import com.dmitrybrant.modelviewer.Light
 import com.dmitrybrant.modelviewer.R
 import com.dmitrybrant.modelviewer.util.Util
@@ -29,9 +29,10 @@ import java.nio.ByteOrder
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-class PlyModel(inputStream: InputStream) : IndexedModel() {
+class PlyModel(inputStream: InputStream) : MeshModel() {
     private val pointColor = floatArrayOf(1.0f, 1.0f, 1.0f, 1.0f)
     private var isPointCloud = false
+    private var hasVertexColors = false
 
     init {
         val stream = BufferedInputStream(inputStream, INPUT_BUFFER_SIZE)
@@ -174,7 +175,8 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             normalBuffer!!.position(0)
         }
 
-        if (colors.isNotEmpty()) {
+        // Point clouds always need colors, but meshes only have them if the file does.
+        if (colors.isNotEmpty() && (isPointCloud || hasVertexColors)) {
             vbb = ByteBuffer.allocateDirect(colors.size * BYTES_PER_FLOAT)
             vbb.order(ByteOrder.nativeOrder())
             colorBuffer = vbb.asFloatBuffer()
@@ -455,7 +457,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         }
 
         if (rOffset >= 0 && gOffset >= 0 && bOffset >= 0) {
-            useColorBuffer = true
+            hasVertexColors = true
         }
 
         for (i in 0 until vertexCount) {
@@ -491,7 +493,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             centerMassY += y.toDouble()
             centerMassZ += z.toDouble()
 
-            if (useColorBuffer) {
+            if (hasVertexColors) {
                 colors.add((tempBytes[rOffset].toInt() and 0xff).toFloat() / 255f)
                 colors.add((tempBytes[gOffset].toInt() and 0xff).toFloat() / 255f)
                 colors.add((tempBytes[bOffset].toInt() and 0xff).toFloat() / 255f)
@@ -542,7 +544,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
         }
 
         if (rIndex >= 0 && gIndex >= 0 && bIndex >= 0) {
-            useColorBuffer = true
+            hasVertexColors = true
         }
 
         var i = 0
@@ -563,7 +565,7 @@ class PlyModel(inputStream: InputStream) : IndexedModel() {
             centerMassX += x.toDouble()
             centerMassY += y.toDouble()
             centerMassZ += z.toDouble()
-            if (useColorBuffer) {
+            if (hasVertexColors) {
                 colors.add(lineArr[rIndex].toFloat() / 255f)
                 colors.add(lineArr[gIndex].toFloat() / 255f)
                 colors.add(lineArr[bIndex].toFloat() / 255f)

@@ -1,18 +1,14 @@
 package com.dmitrybrant.modelviewer.vdb
 
-import android.opengl.GLES20
-import android.opengl.Matrix
-import com.dmitrybrant.modelviewer.IndexedModel
-import com.dmitrybrant.modelviewer.Light
+import com.dmitrybrant.modelviewer.MeshModel
 import java.io.IOException
 import java.io.InputStream
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
+import kotlin.math.pow
 
 /*
 * Displays an OpenVDB volume as a surface mesh. Level sets are shown as their zero isosurface,
 * and fog volumes (e.g. smoke or clouds) are shown as the isosurface at a fixed fraction of their
-* maximum density.
+* maximum density. If the file also has a color grid, the surface is colored with it.
 *
 * Copyright 2026 Dmitry Brant. All rights reserved.
 *
@@ -28,13 +24,11 @@ import java.nio.ByteOrder
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-class VdbModel(inputStream: InputStream) : IndexedModel() {
+class VdbModel(inputStream: InputStream) : MeshModel() {
     var gridName = ""
         private set
-
-    // Vertex, normal, and index buffer objects. Volumes tend to produce large meshes, so the mesh
-    // is uploaded to the GPU once, instead of being copied from client memory on every frame.
-    private val bufferIds = IntArray(3)
+    var colorGridName: String? = null
+        private set
 
     init {
         val mesh = extractMesh(inputStream)
@@ -45,18 +39,38 @@ class VdbModel(inputStream: InputStream) : IndexedModel() {
     }
 
     /**
-     * Reads the volume and extracts its surface at full resolution. This is kept separate from
-     * creating the vertex buffers, so that the voxel data can be released before then.
+     * Reads the volume and extracts its surface at full resolution (and its colors, if any).
+     * This is kept separate from creating the vertex buffers, so that the voxel data can be released before then.
      */
     private fun extractMesh(inputStream: InputStream): SurfaceNets.Mesh {
-        val grid = VdbReader(inputStream).readGrid()
+        val grids = VdbReader(inputStream).read()
+        val grid = grids.surface
         gridName = grid.name
         val surfaceNets = if (grid.isLevelSet) {
             SurfaceNets(grid, 0f, false)
         } else {
             SurfaceNets(grid, grid.maxValue * FOG_ISO_FRACTION, true)
         }
-        return surfaceNets.extract()
+        val mesh = surfaceNets.extract()
+        grids.color?.let {
+            colorGridName = it.name
+            colorBuffer = allocateFloats(sampleColors(it, mesh))
+        }
+        return mesh
+    }
+
+    private fun sampleColors(colorGrid: VdbGrid, mesh: SurfaceNets.Mesh): FloatArray {
+        val colors = FloatArray(mesh.vertexCount * 4)
+        val color = FloatArray(3)
+        val vertices = mesh.vertices
+        for (i in 0 until mesh.vertexCount) {
+            colorGrid.sample(vertices[i * 3].toDouble(), vertices[i * 3 + 1].toDouble(), vertices[i * 3 + 2].toDouble(), color)
+            for (c in 0 until 3) {
+                colors[i * 4 + c] = linearToSrgb(color[c])
+            }
+            colors[i * 4 + 3] = 1f
+        }
+        return colors
     }
 
     private fun setMesh(mesh: SurfaceNets.Mesh) {
@@ -80,68 +94,9 @@ class VdbModel(inputStream: InputStream) : IndexedModel() {
         centerMassY = (sumY / vertexCount).toFloat()
         centerMassZ = (sumZ / vertexCount).toFloat()
 
-        vertexBuffer = ByteBuffer.allocateDirect(vertexCount * 3 * BYTES_PER_FLOAT).order(ByteOrder.nativeOrder()).asFloatBuffer().apply {
-            put(vertices, 0, vertexCount * 3)
-            position(0)
-        }
-        normalBuffer = ByteBuffer.allocateDirect(vertexCount * 3 * BYTES_PER_FLOAT).order(ByteOrder.nativeOrder()).asFloatBuffer().apply {
-            put(mesh.normals, 0, vertexCount * 3)
-            position(0)
-        }
-        indexBuffer = ByteBuffer.allocateDirect(indexCount * BYTES_PER_INT).order(ByteOrder.nativeOrder()).asIntBuffer().apply {
-            put(mesh.indices, 0, indexCount)
-            position(0)
-        }
-    }
-
-    override fun setup(boundSize: Float) {
-        super.setup(boundSize)
-        // This is called whenever a new GL context is created, so any previous buffers are already gone.
-        GLES20.glGenBuffers(bufferIds.size, bufferIds, 0)
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, bufferIds[0])
-        GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, vertexCount * VERTEX_STRIDE, vertexBuffer, GLES20.GL_STATIC_DRAW)
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, bufferIds[1])
-        GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, vertexCount * VERTEX_STRIDE, normalBuffer, GLES20.GL_STATIC_DRAW)
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
-        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, bufferIds[2])
-        GLES20.glBufferData(GLES20.GL_ELEMENT_ARRAY_BUFFER, indexCount * BYTES_PER_INT, indexBuffer, GLES20.GL_STATIC_DRAW)
-        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0)
-    }
-
-    override fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray, light: Light) {
-        GLES20.glUseProgram(glProgram)
-
-        val mvpMatrixHandle = GLES20.glGetUniformLocation(glProgram, "u_MVP")
-        val positionHandle = GLES20.glGetAttribLocation(glProgram, "a_Position")
-        val normalHandle = GLES20.glGetAttribLocation(glProgram, "a_Normal")
-        val lightPosHandle = GLES20.glGetUniformLocation(glProgram, "u_LightPos")
-        val ambientColorHandle = GLES20.glGetUniformLocation(glProgram, "u_ambientColor")
-        val diffuseColorHandle = GLES20.glGetUniformLocation(glProgram, "u_diffuseColor")
-        val specularColorHandle = GLES20.glGetUniformLocation(glProgram, "u_specularColor")
-
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, bufferIds[0])
-        GLES20.glEnableVertexAttribArray(positionHandle)
-        GLES20.glVertexAttribPointer(positionHandle, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, VERTEX_STRIDE, 0)
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, bufferIds[1])
-        GLES20.glEnableVertexAttribArray(normalHandle)
-        GLES20.glVertexAttribPointer(normalHandle, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, VERTEX_STRIDE, 0)
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
-
-        Matrix.multiplyMM(mvMatrix, 0, viewMatrix, 0, modelMatrix, 0)
-        Matrix.multiplyMM(mvpMatrix, 0, projectionMatrix, 0, mvMatrix, 0)
-
-        GLES20.glUniformMatrix4fv(mvpMatrixHandle, 1, false, mvpMatrix, 0)
-        GLES20.glUniform3fv(lightPosHandle, 1, light.positionInEyeSpace, 0)
-        GLES20.glUniform4fv(ambientColorHandle, 1, light.ambientColor, 0)
-        GLES20.glUniform4fv(diffuseColorHandle, 1, light.diffuseColor, 0)
-        GLES20.glUniform4fv(specularColorHandle, 1, light.specularColor, 0)
-
-        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, bufferIds[2])
-        GLES20.glDrawElements(GLES20.GL_TRIANGLES, indexCount, GLES20.GL_UNSIGNED_INT, 0)
-        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0)
-
-        GLES20.glDisableVertexAttribArray(normalHandle)
-        GLES20.glDisableVertexAttribArray(positionHandle)
+        vertexBuffer = allocateFloats(vertices, vertexCount * 3)
+        normalBuffer = allocateFloats(mesh.normals, vertexCount * 3)
+        indexBuffer = allocateInts(mesh.indices, indexCount)
     }
 
     public override fun initModelMatrix(boundSize: Float) {
@@ -156,5 +111,13 @@ class VdbModel(inputStream: InputStream) : IndexedModel() {
     companion object {
         // Fraction of the maximum density at which to draw the surface of a fog volume.
         const val FOG_ISO_FRACTION = 0.1f
+
+        /**
+         * Volume colors are in linear space (as used for rendering), so they're converted to sRGB for display.
+         */
+        fun linearToSrgb(value: Float): Float {
+            val c = value.coerceIn(0f, 1f)
+            return if (c <= 0.0031308f) c * 12.92f else 1.055f * c.pow(1f / 2.4f) - 0.055f
+        }
     }
 }

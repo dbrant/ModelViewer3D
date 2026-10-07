@@ -2,9 +2,13 @@ package com.dmitrybrant.modelviewer
 
 import android.opengl.GLES20
 import android.opengl.Matrix
+import com.dmitrybrant.modelviewer.MeshModel.Companion.BYTES_PER_FLOAT
+import com.dmitrybrant.modelviewer.MeshModel.Companion.COORDS_PER_VERTEX
+import com.dmitrybrant.modelviewer.MeshModel.Companion.VERTEX_STRIDE
 import com.dmitrybrant.modelviewer.util.Util.compileProgram
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.FloatBuffer
 
 /*
 * Copyright 2017 Dmitry Brant. All rights reserved.
@@ -21,7 +25,10 @@ import java.nio.ByteOrder
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-class Floor : ArrayModel() {
+class Floor : Model() {
+    private var vertexBuffer: FloatBuffer? = null
+    private var normalBuffer: FloatBuffer? = null
+    private var vertexCount = 0
     private val floorColor = floatArrayOf(0.2f, 0.2f, 0.2f, 0.5f)
     private val lineColor = floatArrayOf(0.6f, 0.6f, 0.6f, 0.5f)
     private var extent = 0f

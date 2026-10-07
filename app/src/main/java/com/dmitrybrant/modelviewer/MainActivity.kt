@@ -36,6 +36,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.ByteArrayInputStream
@@ -66,10 +67,22 @@ class MainActivity : AppCompatActivity() {
     private var modelView: ModelSurfaceView? = null
 
     private val openDocumentLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (it.resultCode == RESULT_OK && it.data?.data != null) {
-            val uri = it.data?.data
-            grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            beginLoadModel(uri!!)
+        if (it.resultCode != RESULT_OK) {
+            return@registerForActivityResult
+        }
+        // Several files may be selected: a model along with the files that it uses, such as textures.
+        val uris = mutableListOf<Uri>()
+        it.data?.clipData?.let { clipData ->
+            for (i in 0 until clipData.itemCount) {
+                uris.add(clipData.getItemAt(i).uri)
+            }
+        }
+        if (uris.isEmpty()) {
+            it.data?.data?.let { uri -> uris.add(uri) }
+        }
+        uris.forEach { uri -> grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        if (uris.isNotEmpty()) {
+            beginLoadModel(uris)
         }
     }
 
@@ -115,7 +128,7 @@ class MainActivity : AppCompatActivity() {
         sampleModels = assets.list("")!!.filter { it.endsWith(".stl") }
 
         if (intent.data != null && savedInstanceState == null) {
-            beginLoadModel(intent.data!!)
+            beginLoadModel(listOf(intent.data!!))
         }
     }
 
@@ -171,6 +184,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun beginOpenModel() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*")
+            .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
         openDocumentLauncher.launch(intent)
     }
 
@@ -182,7 +196,11 @@ class MainActivity : AppCompatActivity() {
         binding.containerView.addView(modelView, 0)
     }
 
-    private fun beginLoadModel(uri: Uri) {
+    /**
+     * Loads a model from the first of the given files that looks like a model, and makes any other
+     * files available to it (e.g. the materials and textures of an OBJ model).
+     */
+    private fun beginLoadModel(uris: List<Uri>) {
         lifecycleScope.launch(CoroutineExceptionHandler { _, throwable ->
             throwable.printStackTrace()
             Toast.makeText(applicationContext, getString(R.string.open_model_error, throwable.message), Toast.LENGTH_SHORT).show()
@@ -190,29 +208,42 @@ class MainActivity : AppCompatActivity() {
             binding.progressBar.isVisible = true
 
             var model: Model? = null
+            var resources: UriModelResources? = null
             withContext(Dispatchers.IO) {
                 var stream: InputStream? = null
                 try {
                     val cr = applicationContext.contentResolver
-                    val fileName = getFileName(cr, uri)
+                    val fileNames = uris.map { getFileName(cr, it).orEmpty() }
+                    val modelIndex = fileNames.indexOfFirst { name ->
+                        MODEL_EXTENSIONS.any { name.lowercase(Locale.ROOT).endsWith(it) }
+                    }.coerceAtLeast(0)
+                    val uri = uris[modelIndex]
+                    val fileName = fileNames[modelIndex]
+                    val selectedFiles = uris.indices.filter { it != modelIndex }
+                        .associate { fileNames[it].lowercase(Locale.ROOT) to uris[it] }
+
+                    var modelUrl: HttpUrl? = null
                     stream = if ("http" == uri.scheme || "https" == uri.scheme) {
                         val client = OkHttpClient()
                         val request: Request = Request.Builder().url(uri.toString()).build()
                         val response = client.newCall(request).execute()
+                        // Files that the model refers to are relative to where it ended up (after any redirects).
+                        modelUrl = response.request.url
 
                         // TODO: figure out how to NOT need to read the whole file at once.
                         ByteArrayInputStream(response.body.bytes())
                     } else {
                         cr.openInputStream(uri)
                     }
+                    resources = UriModelResources(cr, uri, selectedFiles, modelUrl)
                     if (stream != null) {
-                        if (!fileName.isNullOrEmpty()) {
+                        if (fileName.isNotEmpty()) {
                             model = when {
                                 fileName.lowercase(Locale.ROOT).endsWith(".stl") -> {
                                     StlModel(stream)
                                 }
                                 fileName.lowercase(Locale.ROOT).endsWith(".obj") -> {
-                                    ObjModel(stream)
+                                    ObjModel(stream, resources)
                                 }
                                 fileName.lowercase(Locale.ROOT).endsWith(".ply") -> {
                                     PlyModel(stream)
@@ -238,7 +269,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             model?.let {
-                setCurrentModel(it)
+                setCurrentModel(it, resources?.missingFiles.orEmpty().distinct())
             }
             binding.progressBar.isVisible = false
         }
@@ -256,10 +287,18 @@ class MainActivity : AppCompatActivity() {
         return uri.lastPathSegment
     }
 
-    private fun setCurrentModel(model: Model) {
+    private fun setCurrentModel(model: Model, missingFiles: List<String> = emptyList()) {
         ModelViewerApplication.currentModel = model
         createNewModelView(model)
-        Toast.makeText(applicationContext, R.string.open_model_success, Toast.LENGTH_SHORT).show()
+        if (missingFiles.isNotEmpty()) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.open_model_missing_files_title)
+                .setMessage(getString(R.string.open_model_missing_files, missingFiles.joinToString("\n")))
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        } else {
+            Toast.makeText(applicationContext, R.string.open_model_success, Toast.LENGTH_SHORT).show()
+        }
         title = model.title
         binding.progressBar.isVisible = false
     }
@@ -288,5 +327,9 @@ class MainActivity : AppCompatActivity() {
                 .setMessage(R.string.about_text)
                 .setPositiveButton(android.R.string.ok, null)
                 .show()
+    }
+
+    companion object {
+        private val MODEL_EXTENSIONS = listOf(".stl", ".obj", ".ply", ".vdb")
     }
 }

@@ -4,6 +4,12 @@
 
 Also supports OpenVDB (.vdb) volumes: level sets are displayed as their surface, and fog volumes (such as smoke or clouds) are displayed as the surface where their density reaches 10% of its maximum. The first float or double grid in the file is shown.
 
+Models are shown with their colors and materials, when the file has them:
+* OBJ: materials (colors, shininess, transparency) and diffuse textures, from the material (.mtl) files that the model refers to. Since Android only gives access to the files that you pick, select the .mtl and texture files together with the .obj file when opening it (long-press to select multiple files). Models opened from a web link find their files automatically. OBJ files with vertex colors are also supported.
+* PLY: vertex colors.
+* STL: per-facet colors in binary STL files (as written by VisCAM/SolidView or Materialise Magics).
+* VDB: a color grid (named "Cd" or "color") alongside the volume.
+
 Sample models from the Stanford [3D Scanning Repository](https://graphics.stanford.edu/data/3Dscanrep/), decimated using Blender.
 
 ## License

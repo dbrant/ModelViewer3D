@@ -1,5 +1,7 @@
 package com.dmitrybrant.modelviewer.vdb
 
+import com.dmitrybrant.modelviewer.util.FloatList
+import com.dmitrybrant.modelviewer.util.IntList
 import kotlin.math.sqrt
 
 /*
@@ -52,8 +54,8 @@ class SurfaceNets(private val grid: VdbGrid, private val isoValue: Float, privat
             }
         }
 
-        val positions = FloatList()
-        val normals = FloatList()
+        val positions = FloatList(0x10000)
+        val normals = FloatList(0x10000)
         val cellVertices = HashMap<Long, IntArray>()
         val cellMasks = HashMap<Long, ByteArray>()
         val padded = FloatArray(paddedDim * paddedDim * paddedDim)
@@ -132,7 +134,7 @@ class SurfaceNets(private val grid: VdbGrid, private val isoValue: Float, privat
         }
 
         // Pass 2: connect the vertices of the four cells around each edge that the surface crosses.
-        val indices = IntList()
+        val indices = IntList(0x10000)
         val neighbors = arrayOfNulls<IntArray>(8)
         val quad = IntArray(4)
         for ((key, vertices) in cellVertices) {
@@ -201,7 +203,7 @@ class SurfaceNets(private val grid: VdbGrid, private val isoValue: Float, privat
         val normalArray = normals.array
         transformNormals(normalArray, vertexCount * 3)
         val indexArray = indices.array
-        if (determinant(grid.transform) < 0.0) {
+        if (VdbGrid.determinant3x3(grid.transform) < 0.0) {
             // A mirroring transform reverses the winding of the triangles.
             for (i in 0 until indices.size step 3) {
                 val temp = indexArray[i + 1]
@@ -249,12 +251,7 @@ class SurfaceNets(private val grid: VdbGrid, private val isoValue: Float, privat
      * multiplying the normal (as a column vector) by the plain inverse.
      */
     private fun transformNormals(normals: FloatArray, count: Int) {
-        val m = grid.transform
-        val det = determinant(m)
-        val inv = if (det == 0.0) doubleArrayOf(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0) else doubleArrayOf(
-            (m[4] * m[8] - m[5] * m[7]) / det, (m[2] * m[7] - m[1] * m[8]) / det, (m[1] * m[5] - m[2] * m[4]) / det,
-            (m[5] * m[6] - m[3] * m[8]) / det, (m[0] * m[8] - m[2] * m[6]) / det, (m[2] * m[3] - m[0] * m[5]) / det,
-            (m[3] * m[7] - m[4] * m[6]) / det, (m[1] * m[6] - m[0] * m[7]) / det, (m[0] * m[4] - m[1] * m[3]) / det)
+        val inv = VdbGrid.invert3x3(grid.transform)
         for (i in 0 until count step 3) {
             val x = normals[i]
             val y = normals[i + 1]
@@ -268,38 +265,6 @@ class SurfaceNets(private val grid: VdbGrid, private val isoValue: Float, privat
                 normals[i + 1] = ny / length
                 normals[i + 2] = nz / length
             }
-        }
-    }
-
-    private fun determinant(m: DoubleArray): Double {
-        return m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6]) + m[2] * (m[3] * m[7] - m[4] * m[6])
-    }
-
-    private class FloatList {
-        var array = FloatArray(0x10000)
-            private set
-        var size = 0
-            private set
-
-        fun add(value: Float) {
-            if (size == array.size) {
-                array = array.copyOf(size * 2)
-            }
-            array[size++] = value
-        }
-    }
-
-    private class IntList {
-        var array = IntArray(0x10000)
-            private set
-        var size = 0
-            private set
-
-        fun add(value: Int) {
-            if (size == array.size) {
-                array = array.copyOf(size * 2)
-            }
-            array[size++] = value
         }
     }
 

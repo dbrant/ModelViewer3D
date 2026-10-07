@@ -7,6 +7,8 @@
     <string name="open_model">Open model…</string>
     <string name="open_model_success">Model loaded successfully.</string>
     <string name="open_model_error">Failed to load model: %s</string>
+    <string name="open_model_missing_files_title">Some files are missing</string>
+    <string name="open_model_missing_files">The model was loaded, but it uses these files, which weren\'t found:\n\n%s\n\nTo include them, open the model again, and select these files along with it. (Long-press a file to select more than one.)</string>
     <string name="view_vr">View in VR mode</string>
     <string name="view_vr_not_loaded">Please load a model first.</string>
 </resources>
