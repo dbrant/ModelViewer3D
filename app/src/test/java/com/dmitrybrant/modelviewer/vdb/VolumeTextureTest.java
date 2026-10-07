@@ -29,7 +29,7 @@ public class VolumeTextureTest {
         assertArrayEquals(new int[] {MIN_INDEX - 1, MIN_INDEX - 1, MIN_INDEX - 1}, texture.getOrigin());
         assertEquals(1f, texture.getMaxDensity(), 0f);
         assertEquals(2, texture.getChannels());
-        assertFalse(texture.getHasTemperature());
+        assertEquals(VolumeTexture.Glow.NONE, texture.getGlow());
         assertNull(texture.getColor());
 
         // This includes the middle of the sphere, which is a tile rather than a leaf.
@@ -140,7 +140,7 @@ public class VolumeTextureTest {
         VolumeTexture plain = build(VolumeTexture.MAX_BYTES, fogSphere());
         VolumeTexture texture = build(VolumeTexture.MAX_BYTES, fogSphere(), temperatureGrid("temperature"));
         assertEquals(3, texture.getChannels());
-        assertTrue(texture.getHasTemperature());
+        assertEquals(VolumeTexture.Glow.THERMAL, texture.getGlow());
         assertNull(texture.getColor());
         int size = texture.getSizeX();
         assertSize(texture, size);
@@ -170,7 +170,58 @@ public class VolumeTextureTest {
         }
         VolumeTexture coldTexture = build(VolumeTexture.MAX_BYTES, fogSphere(), cold);
         assertEquals(2, coldTexture.getChannels());
-        assertFalse(coldTexture.getHasTemperature());
+        assertEquals(VolumeTexture.Glow.NONE, coldTexture.getGlow());
+    }
+
+    @Test
+    public void testFlames() throws Exception {
+        VolumeTexture plain = build(VolumeTexture.MAX_BYTES, fogSphere());
+        VolumeTexture texture = build(VolumeTexture.MAX_BYTES, fogSphere(), flameGrid("flames"));
+        assertEquals(VolumeTexture.Glow.FLAME, texture.getGlow());
+        assertEquals(3, texture.getChannels());
+        // The texture extends upward to include the flames, which are above the sphere.
+        int top = FLAME_ORIGIN.get(1) + 7;
+        assertArrayEquals(plain.getOrigin(), texture.getOrigin());
+        assertEquals(plain.getSizeX(), texture.getSizeX());
+        assertEquals(top - (MIN_INDEX - 1) + 2, texture.getSizeY());
+        assertEquals(plain.getSizeZ(), texture.getSizeZ());
+
+        for (int k = 0; k < texture.getSizeZ(); k++) {
+            for (int j = 0; j < texture.getSizeY(); j++) {
+                for (int i = 0; i < texture.getSizeX(); i++) {
+                    String texel = "Texel " + i + "," + j + "," + k;
+                    int density = j < plain.getSizeY() ? density(plain, i, j, k) : 0;
+                    assertEquals(texel, density, density(texture, i, j, k));
+                    // Flames are sampled even where there is no density.
+                    int x = MIN_INDEX - 1 + i - FLAME_ORIGIN.get(0), y = MIN_INDEX - 1 + j - FLAME_ORIGIN.get(1),
+                            z = MIN_INDEX - 1 + k - FLAME_ORIGIN.get(2);
+                    boolean inFlames = x >= 0 && x < 8 && y >= 0 && y < 8 && z >= 0 && z < 8;
+                    assertEquals(texel, inFlames ? 255 : 0, channel(texture, i, j, k, 2));
+                }
+            }
+        }
+        // The flames would fill a cube of 8 voxels on each side, at full intensity.
+        assertEquals(8 * VOXEL_SIZE, texture.getFlameLength(), 1e-9);
+    }
+
+    @Test
+    public void testFlamesWithoutDensity() throws Exception {
+        VdbTestWriter.Grid empty = new VdbTestWriter.Grid();
+        empty.name = "density";
+        empty.gridClass = "fog volume";
+        empty.scale = new double[] {VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE};
+        empty.translation = TRANSLATION;
+        empty.tiles = constantTiles(0);
+        empty.leaves.put(List.of(0, 0, 0), new VdbTestWriter.Leaf());
+        VolumeTexture texture = build(VolumeTexture.MAX_BYTES, empty, flameGrid("flames"));
+        assertEquals(VolumeTexture.Glow.FLAME, texture.getGlow());
+        assertEquals(0f, texture.getMaxDensity(), 0f);
+        assertSize(texture, 10);
+        for (int c = 0; c < 3; c++) {
+            assertEquals(FLAME_ORIGIN.get(c) - 1, texture.getOrigin()[c]);
+            // Without any density, the center of the volume is the center of the flames.
+            assertEquals((FLAME_ORIGIN.get(c) + 3.5) * VOXEL_SIZE + TRANSLATION[c], texture.getCentroid()[c], 1e-9);
+        }
     }
 
     @Test
@@ -179,10 +230,10 @@ public class VolumeTextureTest {
         empty.gridClass = "fog volume";
         empty.tiles = constantTiles(0);
         empty.leaves.put(List.of(0, 0, 0), new VdbTestWriter.Leaf());
-        assertNull(VolumeTexture.Companion.build(read(empty), null, null, VolumeTexture.MAX_BYTES));
+        assertNull(VolumeTexture.Companion.build(read(empty), null, null, VolumeTexture.Glow.NONE, VolumeTexture.MAX_BYTES));
 
         // Too large even at an eighth of the resolution (5^3 texels).
-        assertNull(VolumeTexture.Companion.build(read(fogSphere()), null, null, 100));
+        assertNull(VolumeTexture.Companion.build(read(fogSphere()), null, null, VolumeTexture.Glow.NONE, 100));
     }
 
     @Test
@@ -191,12 +242,16 @@ public class VolumeTextureTest {
         assertTrue(fog instanceof VdbVolumeModel);
         assertEquals("fog", ((VdbVolumeModel) fog).getGridName());
         assertNull(((VdbVolumeModel) fog).getColorGridName());
-        assertNull(((VdbVolumeModel) fog).getTemperatureGridName());
+        assertNull(((VdbVolumeModel) fog).getGlowGridName());
 
         Model coloredFire = load(fogSphere(), colorGrid("Cd", false), temperatureGrid("temperature"));
         assertTrue(coloredFire instanceof VdbVolumeModel);
         assertEquals("Cd", ((VdbVolumeModel) coloredFire).getColorGridName());
-        assertEquals("temperature", ((VdbVolumeModel) coloredFire).getTemperatureGridName());
+        assertEquals("temperature", ((VdbVolumeModel) coloredFire).getGlowGridName());
+
+        // Flames glow rather than the temperature, if there are both.
+        Model flames = load(fogSphere(), temperatureGrid("temperature"), flameGrid("flames"));
+        assertEquals("flames", ((VdbVolumeModel) flames).getGlowGridName());
 
         Model levelSet = load(levelSetSphere());
         assertTrue(levelSet instanceof VdbModel);
@@ -335,11 +390,13 @@ public class VolumeTextureTest {
         assertEquals(size, texture.getSizeZ());
     }
 
-    /** Builds the texture of the first grid, along with the color and temperature grids among the others. */
+    /** Builds the texture of the first grid, along with the color, temperature, and flame grids among the others. */
     private static VolumeTexture build(long maxBytes, VdbTestWriter.Grid... grids) throws IOException {
         VdbReader.Grids result = new VdbReader(new ByteArrayInputStream(VdbTestWriter.write(List.of(grids)))).read();
         assertEquals(grids[0].name, result.getSurface().getName());
-        VolumeTexture texture = VolumeTexture.Companion.build(result.getSurface(), result.getColor(), result.getTemperature(), maxBytes);
+        VdbGrid glowGrid = result.getFlames() != null ? result.getFlames() : result.getTemperature();
+        VolumeTexture.Glow glowKind = result.getFlames() != null ? VolumeTexture.Glow.FLAME : VolumeTexture.Glow.THERMAL;
+        VolumeTexture texture = VolumeTexture.Companion.build(result.getSurface(), result.getColor(), glowGrid, glowKind, maxBytes);
         assertNotNull(texture);
         return texture;
     }

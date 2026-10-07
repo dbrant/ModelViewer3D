@@ -15,7 +15,7 @@ import java.nio.FloatBuffer
 * Displays an OpenVDB fog volume (such as smoke or a cloud) by ray marching through its density
 * on the GPU, which shows all of its soft, semi-transparent detail. The volume is lit from above,
 * with shadows that it casts on itself, and from the direction of the camera. If the volume has a
-* temperature, its hot parts (such as fire) glow with the color of their temperature.
+* temperature or flames, its hot parts glow with the colors of fire.
 *
 * Copyright 2026 Dmitry Brant. All rights reserved.
 *
@@ -32,7 +32,7 @@ import java.nio.FloatBuffer
 * limitations under the License.
 */
 class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, val colorGridName: String?,
-                     val temperatureGridName: String?) : Model() {
+                     val glowGridName: String?) : Model() {
     // GL objects, which belong to the context in which setup() was last called.
     private var volumeTexture = 0
     private var colorTexture = 0
@@ -72,13 +72,13 @@ class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, va
             texture = texture.downsampled()
         }
         // This is called whenever a new GL context is created, so any previous textures are already gone.
-        volumeTexture = if (texture.hasTemperature) {
+        volumeTexture = if (texture.channels == 3) {
             uploadTexture(texture, texture.texels, GLES30.GL_RGB8, GLES30.GL_RGB)
         } else {
             uploadTexture(texture, texture.texels, GLES30.GL_RG8, GLES30.GL_RG)
         }
         colorTexture = texture.color?.let { uploadTexture(texture, it, GLES30.GL_SRGB8, GLES30.GL_RGB) } ?: 0
-        fireRampTexture = if (texture.hasTemperature) uploadFireRamp() else 0
+        fireRampTexture = if (texture.glow != VolumeTexture.Glow.NONE) uploadFireRamp() else 0
         setTextureTransform(texture)
         if (cubeBuffer == null) {
             cubeBuffer = MeshModel.allocateFloats(CUBE_VERTICES)
@@ -184,7 +184,14 @@ class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, va
         GLES30.glUniformMatrix3fv(GLES30.glGetUniformLocation(glProgram, "u_TextureToWorld"), 1, false, textureToWorld, 0)
         GLES30.glUniform1f(GLES30.glGetUniformLocation(glProgram, "u_DensityScale"), volume.maxDensity * VolumeTexture.EXTINCTION_SCALE)
         GLES30.glUniform1i(GLES30.glGetUniformLocation(glProgram, "u_HasColor"), if (colorTexture != 0) 1 else 0)
-        GLES30.glUniform1f(GLES30.glGetUniformLocation(glProgram, "u_Albedo"), if (volume.hasTemperature) SMOKE_ALBEDO else 1f)
+        val glow = volume.glow
+        GLES30.glUniform1f(GLES30.glGetUniformLocation(glProgram, "u_Albedo"), if (glow != VolumeTexture.Glow.NONE) SMOKE_ALBEDO else 1f)
+        GLES30.glUniform1f(GLES30.glGetUniformLocation(glProgram, "u_ThermalGlow"),
+            if (glow == VolumeTexture.Glow.THERMAL) GLOW_BRIGHTNESS else 0f)
+        // A ray through all of the flames, packed into a cube at full intensity, would glow at full
+        // brightness, whatever the units of the volume.
+        GLES30.glUniform1f(GLES30.glGetUniformLocation(glProgram, "u_FlameGlow"),
+            if (glow == VolumeTexture.Glow.FLAME && volume.flameLength > 0) (GLOW_BRIGHTNESS / volume.flameLength).toFloat() else 0f)
         GLES30.glUniform1i(GLES30.glGetUniformLocation(glProgram, "u_Volume"), 0)
         GLES30.glUniform1i(GLES30.glGetUniformLocation(glProgram, "u_Color"), 1)
         GLES30.glUniform1i(GLES30.glGetUniformLocation(glProgram, "u_FireRamp"), 2)
@@ -230,6 +237,9 @@ class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, va
 
         /** The smoke of fire is sooty, which makes it much darker than a cloud. */
         private const val SMOKE_ALBEDO = 0.5f
+
+        /** Brightness of the glow of the hottest parts of a volume, relative to the light that it reflects. */
+        private const val GLOW_BRIGHTNESS = 4f
 
         /**
          * The faces of the unit cube, as quads whose corners are counterclockwise when seen from

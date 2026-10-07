@@ -33,11 +33,14 @@ object VdbLoader {
         val grid = grids.surface
         if (!grid.isLevelSet) {
             // A volume that's too large to resample is shown as a surface instead.
-            VolumeTexture.build(grid, grids.color, grids.temperature, VolumeTexture.MAX_BYTES)?.let { volume ->
+            // Flames are what glows, if there are any, rather than the temperature.
+            val glowGrid = grids.flames ?: grids.temperature
+            val glowKind = if (grids.flames != null) VolumeTexture.Glow.FLAME else VolumeTexture.Glow.THERMAL
+            VolumeTexture.build(grid, grids.color, glowGrid, glowKind, VolumeTexture.MAX_BYTES)?.let { volume ->
                 val gridName = grid.name
                 val colorGridName = grids.color?.name
-                val temperatureGridName = grids.temperature?.name?.takeIf { volume.hasTemperature }
-                return { VdbVolumeModel(volume, gridName, colorGridName, temperatureGridName) }
+                val glowGridName = glowGrid?.name?.takeIf { volume.glow != VolumeTexture.Glow.NONE }
+                return { VdbVolumeModel(volume, gridName, colorGridName, glowGridName) }
             }
         }
         val surface = VdbModel.extractSurface(grids)

@@ -3,15 +3,18 @@ package com.dmitrybrant.modelviewer.vdb
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
+import kotlin.math.cbrt
+import kotlin.math.ceil
 import kotlin.math.exp
+import kotlin.math.floor
 import kotlin.math.pow
 import kotlin.math.sqrt
 
 /*
 * The density of a fog volume, resampled into a dense 3D texture that can be rendered by ray
 * marching on the GPU. Each texel also holds the fraction of the light from above that reaches it
-* through the volume, which gives the volume its self-shadowing, and optionally its temperature
-* (which makes fire glow) and its color.
+* through the volume, which gives the volume its self-shadowing, and optionally how much it glows
+* (from its temperature or its flames) and its color.
 *
 * Copyright 2026 Dmitry Brant. All rights reserved.
 *
@@ -39,13 +42,18 @@ class VolumeTexture(
     val gridTransform: DoubleArray,
     /** The density of a texel whose stored density is at its maximum (255). */
     val maxDensity: Float,
-    /** Number of bytes per texel in [texels]: 2, or 3 if the volume has a temperature. */
-    val channels: Int,
+    /** How the volume glows, if it does. */
+    val glow: Glow,
     /**
-     * Texels ordered by x, then y, then z (x varies fastest), with these bytes: the density, as a
-     * fraction of [maxDensity], the fraction of the light from above that reaches the texel, and
-     * optionally the temperature, as a fraction of the way from cold (the background of the
-     * temperature grid) to the hottest temperature.
+     * For flames, the size of a cube that would hold all of their glow at full intensity, in world
+     * units, by which the brightness of flames is scaled, so that it doesn't depend on the units.
+     */
+    val flameLength: Double,
+    /**
+     * Texels ordered by x, then y, then z (x varies fastest), with [channels] bytes each: the
+     * density, as a fraction of [maxDensity], the fraction of the light from above that reaches
+     * the texel, and how much it glows, if the volume does: a fraction of the way from the
+     * background of the glow grid (e.g. cold) to its highest value (e.g. the hottest temperature).
      */
     val texels: ByteBuffer,
     /** Optional sRGB color of each texel (three bytes), premultiplied by its density fraction. */
@@ -59,7 +67,17 @@ class VolumeTexture(
      */
     val textureToWorld = computeTextureToWorld(intArrayOf(sizeX, sizeY, sizeZ), origin, factor, gridTransform)
 
-    val hasTemperature get() = channels == 3
+    /** Number of bytes per texel in [texels]. */
+    val channels get() = if (glow == Glow.NONE) 2 else 3
+
+    /** How a volume glows. */
+    enum class Glow {
+        NONE,
+        /** By its temperature, as much as it absorbs light (like the soot of fire), by Kirchhoff's law. */
+        THERMAL,
+        /** With flames, which glow on their own, even where there's no density. */
+        FLAME
+    }
 
     /**
      * Returns this texture at half its resolution.
@@ -109,7 +127,7 @@ class VolumeTexture(
             }
         }
         return VolumeTexture(newSizeX, newSizeY, newSizeZ, origin, factor * 2, gridTransform, maxDensity,
-            channels, newTexels, newColor, centroid)
+            glow, flameLength, newTexels, newColor, centroid)
     }
 
     companion object {
@@ -131,6 +149,8 @@ class VolumeTexture(
         /** Range of blackbody temperatures (in Kelvin) that the temperature of fire is shown with. */
         const val FIRE_MIN_KELVIN = 800.0
         const val FIRE_MAX_KELVIN = 2500.0
+
+        private const val ROUNDING = 1e-6
 
         /** Second radiation constant of Planck's law (hc/k), in meter-Kelvins. */
         private const val PLANCK_C2 = 1.4388e-2
@@ -158,33 +178,27 @@ class VolumeTexture(
         }
 
         /**
-         * Resamples the density of a fog volume (and its color and temperature grids, if any) at
-         * the highest resolution that fits within the given number of bytes. Returns null if the
-         * volume has no density at all, or if it's too large even at the lowest resolution.
+         * Resamples the density of a fog volume (and its color grid and a grid that makes it glow,
+         * if any) at the highest resolution that fits within the given number of bytes. Returns
+         * null if the volume has no density or flames at all, or if it's too large even at the
+         * lowest resolution.
          */
-        fun build(grid: VdbGrid, colorGrid: VdbGrid?, temperatureGrid: VdbGrid?, maxBytes: Long): VolumeTexture? {
-            // Find the extent of the voxels that have any density.
+        fun build(grid: VdbGrid, colorGrid: VdbGrid?, glowGrid: VdbGrid?, glowKind: Glow, maxBytes: Long): VolumeTexture? {
+            // A glow grid that's cold everywhere doesn't make anything glow.
+            val hottest = glowGrid?.let { maxValue(it) } ?: 0f
+            val glow = if (glowGrid != null && hottest > glowGrid.background) glowKind else Glow.NONE
+
+            // Find the extent of the voxels that have any density, and of any flames, which glow
+            // even where there's no density.
             val min = IntArray(3) { Int.MAX_VALUE }
             val max = IntArray(3) { Int.MIN_VALUE }
-            val leafLog2 = grid.leafLog2
-            val leafMask = grid.leafDim - 1
-            for ((key, values) in grid.leaves) {
-                val originX = VdbGrid.unpackKeyX(key) shl leafLog2
-                val originY = VdbGrid.unpackKeyY(key) shl leafLog2
-                val originZ = VdbGrid.unpackKeyZ(key) shl leafLog2
-                for (i in 0 until (1 shl (3 * leafLog2))) {
-                    if (values[i * grid.components] > 0f) {
-                        include(min, max, originX + (i shr (2 * leafLog2)), originY + ((i shr leafLog2) and leafMask),
-                            originZ + (i and leafMask))
-                    }
-                }
-            }
-            grid.forEachTile { x, y, z, log2Size, value ->
-                if (value > 0f) {
-                    val last = (1 shl log2Size) - 1
-                    include(min, max, x, y, z)
-                    include(min, max, x + last, y + last, z + last)
-                }
+            includeValuesAbove(grid, 0f, min, max)
+            val flameMin = IntArray(3) { Int.MAX_VALUE }
+            val flameMax = IntArray(3) { Int.MIN_VALUE }
+            if (glow == Glow.FLAME) {
+                includeOtherGrid(glowGrid!!, grid, flameMin, flameMax)
+                include(min, max, flameMin[0], flameMin[1], flameMin[2])
+                include(min, max, flameMax[0], flameMax[1], flameMax[2])
             }
             if (min[0] > max[0]) {
                 return null
@@ -192,11 +206,9 @@ class VolumeTexture(
 
             // Reduce the resolution by powers of two until the texture fits. Texels then never
             // straddle leaves, so the density of each one can be averaged from a single leaf.
-            // A temperature grid that's cold everywhere doesn't make anything glow.
-            val hottest = temperatureGrid?.let { maxValue(it) } ?: 0f
-            val hotGrid = temperatureGrid?.takeIf { hottest > it.background }
-            val channels = if (hotGrid != null) 3 else 2
+            val channels = if (glow == Glow.NONE) 2 else 3
             val bytesPerTexel = channels + if (colorGrid != null) 3 else 0
+            val leafLog2 = grid.leafLog2
             var log2Factor = 0
             val lo = IntArray(3)
             val size = IntArray(3)
@@ -224,7 +236,7 @@ class VolumeTexture(
             grid.forEachTile { _, _, _, _, value ->
                 if (value > maxDensity) maxDensity = value
             }
-            val densityScale = 255f / maxDensity
+            val densityScale = if (maxDensity > 0f) 255f / maxDensity else 0f
 
             val texels = allocate(sizeX * sizeY * sizeZ * channels)
             grid.forEachTile { x, y, z, log2Size, value ->
@@ -253,28 +265,39 @@ class VolumeTexture(
             val textureToWorld = computeTextureToWorld(size, texelOrigin, factor, grid.transform)
             val centroid = computeLight(size, texels, channels, maxDensity, grid.transform, factor, textureToWorld)
 
-            // Only the temperature and color where there's density matter, since only a volume
-            // with density glows or reflects light.
-            if (hotGrid != null) {
-                val cold = hotGrid.background
-                val temperatureScale = 255f / (hottest - cold)
-                sampleAtTexels(size, texels, channels, textureToWorld, hotGrid) { i, _, temperature ->
-                    texels.put(i * channels + 2, toByte((temperature[0] - cold) * temperatureScale))
+            // The temperature and color only matter where there's density, since only a volume
+            // with density reflects light, or glows by its temperature. Flames glow anywhere.
+            val firstTexel = IntArray(3)
+            var flameLength = 0.0
+            if (glow != Glow.NONE) {
+                val cold = glowGrid!!.background
+                val glowScale = 255f / (hottest - cold)
+                val glowLo = if (glow == Glow.FLAME) IntArray(3) { (flameMin[it] shr log2Factor) - lo[it] } else firstTexel
+                val glowHi = if (glow == Glow.FLAME) IntArray(3) { (flameMax[it] shr log2Factor) - lo[it] + 1 } else size
+                var glowSum = 0.0
+                sampleAtTexels(size, glowLo, glowHi, glow == Glow.THERMAL, texels, channels, textureToWorld, glowGrid) { i, _, value ->
+                    val glowByte = toByte((value[0] - cold) * glowScale)
+                    texels.put(i * channels + 2, glowByte)
+                    glowSum += (glowByte.toInt() and 0xff) / 255.0
+                }
+                if (glow == Glow.FLAME) {
+                    val texelSize = factor * cbrt(abs(VdbGrid.determinant3x3(grid.transform)))
+                    flameLength = cbrt(glowSum) * texelSize
                 }
             }
             val color = colorGrid?.let { colorGrid ->
                 // Colors are premultiplied by the density, so that filtering the texture doesn't
                 // blend in the colors of empty texels.
                 val colors = allocate(sizeX * sizeY * sizeZ * 3)
-                sampleAtTexels(size, texels, channels, textureToWorld, colorGrid) { i, density, color ->
+                sampleAtTexels(size, firstTexel, size, true, texels, channels, textureToWorld, colorGrid) { i, density, color ->
                     for (c in 0 until 3) {
                         colors.put(i * 3 + c, toByte(VdbModel.linearToSrgb(color[c].coerceIn(0f, 1f) * density) * 255f))
                     }
                 }
                 colors
             }
-            return VolumeTexture(sizeX, sizeY, sizeZ, texelOrigin, factor, grid.transform, maxDensity, channels, texels,
-                color, centroid)
+            return VolumeTexture(sizeX, sizeY, sizeZ, texelOrigin, factor, grid.transform, maxDensity, glow, flameLength,
+                texels, color, centroid)
         }
 
         /**
@@ -311,7 +334,8 @@ class VolumeTexture(
         /**
          * Computes how much of the light from straight above (along the world's y axis) reaches each
          * texel, by attenuating it through the volume along the texture axis that's closest to vertical.
-         * Returns the density-weighted center of the volume, in world coordinates.
+         * Returns the density-weighted center of the volume (or the center of the texture, if it has
+         * no density), in world coordinates.
          */
         private fun computeLight(size: IntArray, texels: ByteBuffer, channels: Int, maxDensity: Float, gridTransform: DoubleArray,
                                  factor: Int, textureToWorld: DoubleArray): DoubleArray {
@@ -351,25 +375,30 @@ class VolumeTexture(
                     }
                 }
             }
+            if (weight == 0.0) {
+                return transform(textureToWorld, 0.5, 0.5, 0.5)
+            }
             return transform(textureToWorld, weightedSum[0] / weight, weightedSum[1] / weight, weightedSum[2] / weight)
         }
 
         /**
-         * Samples the given grid at the center of each texel that has any density, and calls the
-         * given function with the texel's index, its density (as a fraction), and the grid's value.
+         * Samples the given grid at the center of each texel from [lo] (inclusive) to [hi]
+         * (exclusive), optionally only the texels that have any density, and calls the given
+         * function with the texel's index, its density (as a fraction), and the grid's value.
          */
-        private inline fun sampleAtTexels(size: IntArray, texels: ByteBuffer, channels: Int, textureToWorld: DoubleArray,
-                                          grid: VdbGrid, action: (index: Int, density: Float, value: FloatArray) -> Unit) {
+        private inline fun sampleAtTexels(size: IntArray, lo: IntArray, hi: IntArray, requireDensity: Boolean, texels: ByteBuffer,
+                                          channels: Int, textureToWorld: DoubleArray, grid: VdbGrid,
+                                          action: (index: Int, density: Float, value: FloatArray) -> Unit) {
             val value = FloatArray(grid.components)
             val m = textureToWorld
-            for (z in 0 until size[2]) {
+            for (z in lo[2] until hi[2]) {
                 val w = (z + 0.5) / size[2]
-                for (y in 0 until size[1]) {
+                for (y in lo[1] until hi[1]) {
                     val v = (y + 0.5) / size[1]
-                    for (x in 0 until size[0]) {
+                    for (x in lo[0] until hi[0]) {
                         val i = (z * size[1] + y) * size[0] + x
                         val density = (texels.get(i * channels).toInt() and 0xff) / 255f
-                        if (density == 0f) {
+                        if (requireDensity && density == 0f) {
                             continue
                         }
                         val u = (x + 0.5) / size[0]
@@ -378,6 +407,56 @@ class VolumeTexture(
                         action(i, density, value)
                     }
                 }
+            }
+        }
+
+        /**
+         * Expands the given extent (in index coordinates) to include the voxels of the grid whose
+         * values (in their first component) exceed the given threshold.
+         */
+        private fun includeValuesAbove(grid: VdbGrid, threshold: Float, min: IntArray, max: IntArray) {
+            val leafLog2 = grid.leafLog2
+            val leafMask = grid.leafDim - 1
+            for ((key, values) in grid.leaves) {
+                val originX = VdbGrid.unpackKeyX(key) shl leafLog2
+                val originY = VdbGrid.unpackKeyY(key) shl leafLog2
+                val originZ = VdbGrid.unpackKeyZ(key) shl leafLog2
+                for (i in 0 until (1 shl (3 * leafLog2))) {
+                    if (values[i * grid.components] > threshold) {
+                        include(min, max, originX + (i shr (2 * leafLog2)), originY + ((i shr leafLog2) and leafMask),
+                            originZ + (i and leafMask))
+                    }
+                }
+            }
+            grid.forEachTile { x, y, z, log2Size, value ->
+                if (value > threshold) {
+                    val last = (1 shl log2Size) - 1
+                    include(min, max, x, y, z)
+                    include(min, max, x + last, y + last, z + last)
+                }
+            }
+        }
+
+        /**
+         * Expands the given extent (in the index coordinates of [grid]) to include the voxels of
+         * another grid whose values exceed its background, which may have a different transform.
+         */
+        private fun includeOtherGrid(other: VdbGrid, grid: VdbGrid, min: IntArray, max: IntArray) {
+            val otherMin = IntArray(3) { Int.MAX_VALUE }
+            val otherMax = IntArray(3) { Int.MIN_VALUE }
+            includeValuesAbove(other, other.background, otherMin, otherMax)
+            if (otherMin[0] > otherMax[0]) {
+                return
+            }
+            for (n in 0 until 8) {
+                val world = other.indexToWorld(
+                    (if (n and 1 == 0) otherMin[0] else otherMax[0]).toDouble(),
+                    (if (n and 2 == 0) otherMin[1] else otherMax[1]).toDouble(),
+                    (if (n and 4 == 0) otherMin[2] else otherMax[2]).toDouble())
+                val index = grid.worldToIndex(world[0], world[1], world[2])
+                // Round outward, but not past positions that are whole numbers, apart from rounding errors.
+                include(min, max, floor(index[0] + ROUNDING).toInt(), floor(index[1] + ROUNDING).toInt(), floor(index[2] + ROUNDING).toInt())
+                include(min, max, ceil(index[0] - ROUNDING).toInt(), ceil(index[1] - ROUNDING).toInt(), ceil(index[2] - ROUNDING).toInt())
             }
         }
 

@@ -138,6 +138,23 @@ class VdbGrid(
         leaf.copyInto(value, 0, index, index + components)
     }
 
+    /** Transforms a position in index coordinates to world coordinates. */
+    fun indexToWorld(x: Double, y: Double, z: Double): DoubleArray {
+        val m = transform
+        return doubleArrayOf(x * m[0] + y * m[3] + z * m[6] + m[9], x * m[1] + y * m[4] + z * m[7] + m[10],
+            x * m[2] + y * m[5] + z * m[8] + m[11])
+    }
+
+    /** Transforms a position in world coordinates to (fractional) index coordinates. */
+    fun worldToIndex(x: Double, y: Double, z: Double): DoubleArray {
+        val m = inverseTransform
+        val dx = x - transform[9]
+        val dy = y - transform[10]
+        val dz = z - transform[11]
+        return doubleArrayOf(dx * m[0] + dy * m[3] + dz * m[6], dx * m[1] + dy * m[4] + dz * m[7],
+            dx * m[2] + dy * m[5] + dz * m[8])
+    }
+
     /**
      * Gets the value at the given world-space position, by trilinear interpolation of the
      * surrounding voxels.

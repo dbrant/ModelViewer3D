@@ -25,6 +25,9 @@ public class VdbModelTest {
     // The temperature grid is offset by half a voxel along y, so that its values are interpolated.
     static final double[] TEMPERATURE_TRANSLATION = {TRANSLATION[0], TRANSLATION[1] + VOXEL_SIZE / 2, TRANSLATION[2]};
     static final float TEMPERATURE_COLD = 5;
+    // Flames fill the leaf at this origin, just above the sphere, with this intensity.
+    static final List<Integer> FLAME_ORIGIN = List.of(0, 16, 0);
+    static final float FLAME_VALUE = 0.5f;
 
     @Test
     public void testLevelSetBlosc() throws Exception {
@@ -184,6 +187,23 @@ public class VdbModelTest {
         VdbReader.Grids result = new VdbReader(new ByteArrayInputStream(VdbTestWriter.write(List.of(temperatureGrid("temperature"))))).read();
         assertEquals("temperature", result.getSurface().getName());
         assertNull(result.getTemperature());
+    }
+
+    @Test
+    public void testFlameGrid() throws Exception {
+        // Grids of flames are named "flames" (EmberGen) or "flame" (Blender).
+        for (String name : new String[] {"flames", "Flame"}) {
+            VdbReader.Grids result = new VdbReader(new ByteArrayInputStream(VdbTestWriter.write(
+                    List.of(flameGrid(name), temperatureGrid("temperature"), fogSphere())))).read();
+            assertEquals("fog", result.getSurface().getName());
+            assertEquals(name, result.getFlames().getName());
+            assertEquals("temperature", result.getTemperature().getName());
+        }
+
+        // Without any other grid, the flames are shown as the volume.
+        VdbReader.Grids result = new VdbReader(new ByteArrayInputStream(VdbTestWriter.write(List.of(flameGrid("flames"))))).read();
+        assertEquals("flames", result.getSurface().getName());
+        assertNull(result.getFlames());
     }
 
     @Test
@@ -365,6 +385,20 @@ public class VdbModelTest {
                 }
             }
         }
+        return grid;
+    }
+
+    /** A grid of flames, which fill a single leaf at FLAME_ORIGIN. */
+    static VdbTestWriter.Grid flameGrid(String name) {
+        VdbTestWriter.Grid grid = new VdbTestWriter.Grid();
+        grid.name = name;
+        grid.scale = new double[] {VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE};
+        grid.translation = TRANSLATION;
+        grid.tiles = constantTiles(0);
+        VdbTestWriter.Leaf leaf = new VdbTestWriter.Leaf();
+        java.util.Arrays.fill(leaf.values, FLAME_VALUE);
+        java.util.Arrays.fill(leaf.active, true);
+        grid.leaves.put(FLAME_ORIGIN, leaf);
         return grid;
     }
 
