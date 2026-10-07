@@ -15,7 +15,7 @@ import java.util.zip.Deflater;
  * Writes small OpenVDB files for testing, following the layout produced by OpenVDB itself
  * (see io/Archive.cc and writeCompressedValues() in io/Compression.h), with trees of the
  * standard 5_4_3 configuration. Supports Blosc (LZ4 with byte shuffling), zlib, and uncompressed
- * data, active mask compression, half-float values, and double-precision grids.
+ * data, active mask compression, half-float values, double-precision grids, and vector grids.
  */
 class VdbTestWriter {
     static final int COMPRESS_NONE = 0;
@@ -31,31 +31,42 @@ class VdbTestWriter {
     private static final int UPPER_TOTAL = LOWER_TOTAL + UPPER_LOG2;
 
     interface TileFunction {
-        /** Value of a tile with the given origin and log2 size, for regions that have no leaves. */
+        /** Value of a tile with the given origin and log2 size, for regions that have no leaves (in every component). */
         float value(int x, int y, int z, int log2Size);
 
         boolean active(int x, int y, int z, int log2Size);
     }
 
     static class Leaf {
-        final float[] values = new float[LEAF_SIZE];
+        /** Values of each voxel, with the grid's number of components for each one. */
+        final float[] values;
         final boolean[] active = new boolean[LEAF_SIZE];
+
+        Leaf() {
+            this(1);
+        }
+
+        Leaf(int components) {
+            values = new float[LEAF_SIZE * components];
+        }
     }
 
     static class Grid {
         String name = "grid";
+        /** "float", "double", "vec3s", or "vec3d" */
         String valueType = "float";
         String gridClass;
         boolean half;
         int compression = COMPRESS_BLOSC | COMPRESS_ACTIVE_MASK;
         boolean bloscSplit = true;
+        /** The background value (in every component) */
         float background;
         double[] scale = {1, 1, 1};
         double[] translation = {0, 0, 0};
         /** Leaves keyed by origin; iteration order doesn't matter. */
         final Map<List<Integer>, Leaf> leaves = new LinkedHashMap<>();
         TileFunction tiles;
-        /** Root-level tiles: origin (multiple of 4096) and value, written as active. */
+        /** Root-level tiles: origin (multiple of 4096) and value (in every component), written as active. */
         final Map<List<Integer>, Float> rootTiles = new LinkedHashMap<>();
         /** If set, this grid is written with the given type name and opaque contents instead. */
         String rawType;
@@ -92,7 +103,8 @@ class VdbTestWriter {
 
     /** Returns the grid's header and topology, and its leaf buffers, as two separate arrays. */
     private static byte[][] writeGrid(Grid grid) {
-        int valueSize = grid.valueType.equals("double") ? 8 : 4;
+        int valueSize = grid.valueType.equals("double") || grid.valueType.equals("vec3d") ? 8 : 4;
+        int components = grid.valueType.startsWith("vec3") ? 3 : 1;
         Out out = new Out();
         out.int32(grid.compression);
 
@@ -115,7 +127,7 @@ class VdbTestWriter {
         out.vec3d(new double[] {0.5 / grid.scale[0], 0.5 / grid.scale[1], 0.5 / grid.scale[2]});
 
         out.int32(1); // buffer count
-        out.value(grid.background, valueSize);
+        out.value(filled(grid.background, components), valueSize);
 
         // Group the leaves by their upper and lower internal nodes, in the order that OpenVDB writes them.
         TreeMap<List<Integer>, TreeMap<List<Integer>, TreeMap<List<Integer>, Leaf>>> tree = new TreeMap<>(VdbTestWriter::compareCoords);
@@ -132,16 +144,16 @@ class VdbTestWriter {
         out.int32(tree.size());
         for (Map.Entry<List<Integer>, Float> tile : grid.rootTiles.entrySet()) {
             out.coord(tile.getKey());
-            out.value(tile.getValue(), valueSize);
+            out.value(filled(tile.getValue(), components), valueSize);
             out.int8(1);
         }
         List<Leaf> leafOrder = new ArrayList<>();
         for (Map.Entry<List<Integer>, TreeMap<List<Integer>, TreeMap<List<Integer>, Leaf>>> upper : tree.entrySet()) {
             out.coord(upper.getKey());
-            writeInternalNode(out, grid, valueSize, upper.getKey(), UPPER_LOG2, LOWER_TOTAL, upper.getValue(), (lowerOrigin, lowerChildren) -> {
+            writeInternalNode(out, grid, valueSize, components, upper.getKey(), UPPER_LOG2, LOWER_TOTAL, upper.getValue(), (lowerOrigin, lowerChildren) -> {
                 @SuppressWarnings("unchecked")
                 TreeMap<List<Integer>, Leaf> leaves = (TreeMap<List<Integer>, Leaf>) lowerChildren;
-                writeInternalNode(out, grid, valueSize, lowerOrigin, LOWER_LOG2, LEAF_LOG2, leaves, (leafOrigin, leaf) -> {
+                writeInternalNode(out, grid, valueSize, components, lowerOrigin, LOWER_LOG2, LEAF_LOG2, leaves, (leafOrigin, leaf) -> {
                     out.mask(((Leaf) leaf).active);
                     leafOrder.add((Leaf) leaf);
                 });
@@ -151,7 +163,7 @@ class VdbTestWriter {
         Out buffers = new Out();
         for (Leaf leaf : leafOrder) {
             buffers.mask(leaf.active);
-            writeCompressedValues(buffers, grid, valueSize, leaf.values, leaf.active, new boolean[LEAF_SIZE]);
+            writeCompressedValues(buffers, grid, valueSize, components, leaf.values, leaf.active, new boolean[LEAF_SIZE]);
         }
         return new byte[][] {out.toByteArray(), buffers.toByteArray()};
     }
@@ -160,13 +172,13 @@ class VdbTestWriter {
         void write(List<Integer> origin, Object child);
     }
 
-    private static void writeInternalNode(Out out, Grid grid, int valueSize, List<Integer> origin, int log2, int childLog2,
-                                          TreeMap<List<Integer>, ?> children, ChildWriter childWriter) {
+    private static void writeInternalNode(Out out, Grid grid, int valueSize, int components, List<Integer> origin, int log2,
+                                          int childLog2, TreeMap<List<Integer>, ?> children, ChildWriter childWriter) {
         int numValues = 1 << (3 * log2);
         int dim = 1 << log2;
         boolean[] childMask = new boolean[numValues];
         boolean[] valueMask = new boolean[numValues];
-        float[] values = new float[numValues];
+        float[] values = new float[numValues * components];
         List<List<Integer>> childOrigins = new ArrayList<>();
         for (int i = 0; i < numValues; i++) {
             int x = origin.get(0) + (((i >> (2 * log2)) & (dim - 1)) << childLog2);
@@ -177,44 +189,48 @@ class VdbTestWriter {
                 childMask[i] = true;
                 childOrigins.add(childOrigin);
             } else {
-                values[i] = grid.tiles.value(x, y, z, childLog2);
+                java.util.Arrays.fill(values, i * components, (i + 1) * components, grid.tiles.value(x, y, z, childLog2));
                 valueMask[i] = grid.tiles.active(x, y, z, childLog2);
             }
         }
         out.mask(childMask);
         out.mask(valueMask);
-        writeCompressedValues(out, grid, valueSize, values, valueMask, childMask);
+        writeCompressedValues(out, grid, valueSize, components, values, valueMask, childMask);
         for (List<Integer> childOrigin : childOrigins) {
             childWriter.write(childOrigin, children.get(childOrigin));
         }
     }
 
     /** See writeCompressedValues() in OpenVDB's io/Compression.h */
-    private static void writeCompressedValues(Out out, Grid grid, int valueSize, float[] values, boolean[] valueMask, boolean[] childMask) {
+    private static void writeCompressedValues(Out out, Grid grid, int valueSize, int components, float[] values,
+                                              boolean[] valueMask, boolean[] childMask) {
         if ((grid.compression & COMPRESS_ACTIVE_MASK) == 0) {
             out.int8(6); // NO_MASK_AND_ALL_VALS
             writeData(out, grid, valueSize, values);
             return;
         }
-        float bg = grid.background;
-        List<Float> inactiveValues = new ArrayList<>();
-        for (int i = 0; i < values.length; i++) {
-            if (!valueMask[i] && !childMask[i] && !inactiveValues.contains(values[i])) {
-                inactiveValues.add(values[i]);
+        int count = valueMask.length;
+        List<Float> bg = toList(filled(grid.background, components), 0, components);
+        List<Float> minusBg = toList(filled(-grid.background, components), 0, components);
+        List<List<Float>> inactiveValues = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            List<Float> value = toList(values, i * components, components);
+            if (!valueMask[i] && !childMask[i] && !inactiveValues.contains(value)) {
+                inactiveValues.add(value);
             }
         }
         int metadata;
-        float inactive0 = 0, inactive1 = 0;
+        List<Float> inactive0 = null, inactive1 = null;
         if (inactiveValues.isEmpty()) {
             metadata = 0;
         } else if (inactiveValues.size() == 1) {
             inactive0 = inactiveValues.get(0);
-            metadata = inactive0 == bg ? 0 : inactive0 == -bg ? 1 : 2;
+            metadata = inactive0.equals(bg) ? 0 : inactive0.equals(minusBg) ? 1 : 2;
         } else if (inactiveValues.size() == 2) {
             if (inactiveValues.contains(bg)) {
                 inactive1 = bg;
-                inactive0 = inactiveValues.get(0) == bg ? inactiveValues.get(1) : inactiveValues.get(0);
-                metadata = inactive0 == -bg ? 3 : 4;
+                inactive0 = inactiveValues.get(0).equals(bg) ? inactiveValues.get(1) : inactiveValues.get(0);
+                metadata = inactive0.equals(minusBg) ? 3 : 4;
             } else {
                 inactive0 = inactiveValues.get(0);
                 inactive1 = inactiveValues.get(1);
@@ -235,22 +251,39 @@ class VdbTestWriter {
             out.value(inactive1, valueSize);
         }
         if (metadata >= 3) {
-            boolean[] selection = new boolean[values.length];
-            for (int i = 0; i < values.length; i++) {
-                selection[i] = !valueMask[i] && !childMask[i] && values[i] == inactive1;
+            boolean[] selection = new boolean[count];
+            for (int i = 0; i < count; i++) {
+                selection[i] = !valueMask[i] && !childMask[i] && toList(values, i * components, components).equals(inactive1);
             }
             out.mask(selection);
         }
-        int count = 0;
+        int activeCount = 0;
         for (boolean b : valueMask) {
-            if (b) count++;
+            if (b) activeCount++;
         }
-        float[] activeValues = new float[count];
-        count = 0;
-        for (int i = 0; i < values.length; i++) {
-            if (valueMask[i]) activeValues[count++] = values[i];
+        float[] activeValues = new float[activeCount * components];
+        activeCount = 0;
+        for (int i = 0; i < count; i++) {
+            if (valueMask[i]) {
+                System.arraycopy(values, i * components, activeValues, activeCount * components, components);
+                activeCount++;
+            }
         }
         writeData(out, grid, valueSize, activeValues);
+    }
+
+    private static float[] filled(float value, int components) {
+        float[] values = new float[components];
+        java.util.Arrays.fill(values, value);
+        return values;
+    }
+
+    private static List<Float> toList(float[] values, int start, int count) {
+        List<Float> list = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            list.add(values[start + i]);
+        }
+        return list;
     }
 
     private static void writeData(Out out, Grid grid, int valueSize, float[] values) {
@@ -478,6 +511,18 @@ class VdbTestWriter {
                 int64(Double.doubleToLongBits(v));
             } else {
                 int32(Float.floatToIntBits(v));
+            }
+        }
+
+        void value(float[] values, int size) {
+            for (float v : values) {
+                value(v, size);
+            }
+        }
+
+        void value(List<Float> values, int size) {
+            for (float v : values) {
+                value(v, size);
             }
         }
 

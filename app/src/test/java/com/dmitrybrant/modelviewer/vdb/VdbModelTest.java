@@ -4,6 +4,7 @@ import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.FloatBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,8 @@ public class VdbModelTest {
     private static final double[] TRANSLATION = {1, 2, 3};
     private static final float BACKGROUND = (float) (3 * VOXEL_SIZE);
     private static final List<Integer> ROOT_TILE = List.of(8192, 0, 0);
+    // The color grid is offset by half a voxel from the surface grid, so that its values are interpolated.
+    private static final double[] COLOR_TRANSLATION = {TRANSLATION[0] + VOXEL_SIZE / 2, TRANSLATION[1], TRANSLATION[2]};
 
     @Test
     public void testLevelSetBlosc() throws Exception {
@@ -131,6 +134,36 @@ public class VdbModelTest {
         VdbModel model = new VdbModel(new ByteArrayInputStream(VdbTestWriter.write(List.of(vectorGrid, sphere))));
         assertEquals("sphere", model.getGridName());
         assertTrue(model.getVertexCount() > 0);
+        // A vector grid that isn't named like a color grid isn't used for colors.
+        assertNull(model.getColorGridName());
+        assertNull(model.getColorBuffer());
+    }
+
+    @Test
+    public void testColorGrid() throws Exception {
+        for (boolean half : new boolean[] {false, true}) {
+            VdbTestWriter.Grid velocity = colorGrid("vel", half);
+            VdbTestWriter.Grid color = colorGrid("Cd", half);
+            // The color grid may come before or after the surface grid.
+            for (List<VdbTestWriter.Grid> grids : List.of(List.of(velocity, color, levelSetSphere()), List.of(levelSetSphere(), velocity, color))) {
+                VdbModel model = new VdbModel(new ByteArrayInputStream(VdbTestWriter.write(grids)));
+                assertEquals("sphere", model.getGridName());
+                assertEquals("Cd", model.getColorGridName());
+                assertTrue(model.getHasMaterials());
+
+                // Colors are interpolated from the color grid at each vertex, and converted from linear to sRGB.
+                FloatBuffer vertices = model.getVertexBuffer();
+                FloatBuffer colors = model.getColorBuffer();
+                for (int v = 0; v < model.getVertexCount(); v++) {
+                    for (int c = 0; c < 3; c++) {
+                        double index = (vertices.get(v * 3 + c) - COLOR_TRANSLATION[c]) / VOXEL_SIZE;
+                        float expected = VdbModel.Companion.linearToSrgb(colorValue(index, c));
+                        assertEquals("Vertex " + v + " component " + c, expected, colors.get(v * 4 + c), half ? 3e-3f : 1e-4f);
+                    }
+                    assertEquals(1f, colors.get(v * 4 + 3), 0f);
+                }
+            }
+        }
     }
 
     @Test
@@ -252,6 +285,38 @@ public class VdbModelTest {
         }, (x, y, z) -> Math.abs(distance(x, y, z)) < BACKGROUND);
         grid.background = BACKGROUND;
         grid.rootTiles.put(ROOT_TILE, -BACKGROUND);
+        return grid;
+    }
+
+    /** The linear color at the given index-space position of the color grid, which varies along each axis. */
+    private static float colorValue(double index, int component) {
+        return (float) ((index + 16 + component) / 40);
+    }
+
+    /** A vector grid that covers the sphere, with all voxels active. */
+    private static VdbTestWriter.Grid colorGrid(String name, boolean half) {
+        VdbTestWriter.Grid grid = new VdbTestWriter.Grid();
+        grid.name = name;
+        grid.valueType = "vec3s";
+        grid.half = half;
+        grid.scale = new double[] {VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE};
+        grid.translation = COLOR_TRANSLATION;
+        grid.tiles = constantTiles(0);
+        for (int ox = -24; ox < 32; ox += 8) {
+            for (int oy = -24; oy < 32; oy += 8) {
+                for (int oz = -24; oz < 32; oz += 8) {
+                    VdbTestWriter.Leaf leaf = new VdbTestWriter.Leaf(3);
+                    for (int i = 0; i < 512; i++) {
+                        int[] xyz = {ox + (i >> 6), oy + ((i >> 3) & 7), oz + (i & 7)};
+                        leaf.active[i] = true;
+                        for (int c = 0; c < 3; c++) {
+                            leaf.values[i * 3 + c] = colorValue(xyz[c], c);
+                        }
+                    }
+                    grid.leaves.put(List.of(ox, oy, oz), leaf);
+                }
+            }
+        }
         return grid;
     }
 
