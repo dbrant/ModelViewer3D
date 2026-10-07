@@ -2,6 +2,8 @@
 
 3D model viewer app for Android! Supports STL files (ASCII and binary), and has limited support for OBJ (Wavefront) and PLY (Stanford) files.
 
+Also supports OpenVDB (.vdb) volumes: level sets are displayed as their surface, and fog volumes (such as smoke or clouds) are displayed as the surface where their density reaches 10% of its maximum. The first float or double grid in the file is shown.
+
 Sample models from the Stanford [3D Scanning Repository](https://graphics.stanford.edu/data/3Dscanrep/), decimated using Blender.
 
 ## License
