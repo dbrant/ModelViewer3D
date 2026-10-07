@@ -2,7 +2,7 @@
 
 3D model viewer app for Android! Supports STL files (ASCII and binary), and has limited support for OBJ (Wavefront) and PLY (Stanford) files.
 
-Also supports OpenVDB (.vdb) volumes: level sets are displayed as their surface, and fog volumes (such as smoke or clouds) are rendered as translucent volumes, by ray marching through their density on the GPU, with light from above that the volume shadows itself. The first float or double grid in the file is shown.
+Also supports OpenVDB (.vdb) volumes: level sets are displayed as their surface, and fog volumes (such as smoke or clouds) are rendered as translucent volumes, by ray marching through their density on the GPU, with light from above that the volume shadows itself. The first float or double grid in the file is shown. If the volume also has a temperature grid (named "temperature"), its hot parts glow like fire, with the colors of a blackbody.
 
 Requires a device that supports OpenGL ES 3.0.
 

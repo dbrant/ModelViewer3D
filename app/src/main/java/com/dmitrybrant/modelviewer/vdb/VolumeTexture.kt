@@ -10,7 +10,8 @@ import kotlin.math.sqrt
 /*
 * The density of a fog volume, resampled into a dense 3D texture that can be rendered by ray
 * marching on the GPU. Each texel also holds the fraction of the light from above that reaches it
-* through the volume, which gives the volume its self-shadowing, and optionally its color.
+* through the volume, which gives the volume its self-shadowing, and optionally its temperature
+* (which makes fire glow) and its color.
 *
 * Copyright 2026 Dmitry Brant. All rights reserved.
 *
@@ -38,11 +39,15 @@ class VolumeTexture(
     val gridTransform: DoubleArray,
     /** The density of a texel whose stored density is at its maximum (255). */
     val maxDensity: Float,
+    /** Number of bytes per texel in [texels]: 2, or 3 if the volume has a temperature. */
+    val channels: Int,
     /**
-     * Two bytes per texel, ordered by x, then y, then z (x varies fastest): the density, as a
-     * fraction of [maxDensity], and the fraction of the light from above that reaches the texel.
+     * Texels ordered by x, then y, then z (x varies fastest), with these bytes: the density, as a
+     * fraction of [maxDensity], the fraction of the light from above that reaches the texel, and
+     * optionally the temperature, as a fraction of the way from cold (the background of the
+     * temperature grid) to the hottest temperature.
      */
-    val densityLight: ByteBuffer,
+    val texels: ByteBuffer,
     /** Optional sRGB color of each texel (three bytes), premultiplied by its density fraction. */
     val color: ByteBuffer?,
     /** Density-weighted center of the volume, in world coordinates. */
@@ -54,6 +59,8 @@ class VolumeTexture(
      */
     val textureToWorld = computeTextureToWorld(intArrayOf(sizeX, sizeY, sizeZ), origin, factor, gridTransform)
 
+    val hasTemperature get() = channels == 3
+
     /**
      * Returns this texture at half its resolution.
      */
@@ -61,27 +68,28 @@ class VolumeTexture(
         val newSizeX = (sizeX + 1) / 2
         val newSizeY = (sizeY + 1) / 2
         val newSizeZ = (sizeZ + 1) / 2
-        val newDensityLight = allocate(newSizeX * newSizeY * newSizeZ * 2)
+        val newTexels = allocate(newSizeX * newSizeY * newSizeZ * channels)
         val newColor = color?.let { allocate(newSizeX * newSizeY * newSizeZ * 3) }
+        val sum = IntArray(channels)
         val colorSum = FloatArray(3)
         for (z in 0 until newSizeZ) {
             for (y in 0 until newSizeY) {
                 for (x in 0 until newSizeX) {
-                    // Texels beyond the edges are empty, and fully lit.
-                    var density = 0
-                    var light = 0
+                    sum.fill(0)
                     colorSum.fill(0f)
                     for (n in 0 until 8) {
                         val sx = x * 2 + (n and 1)
                         val sy = y * 2 + ((n shr 1) and 1)
                         val sz = z * 2 + ((n shr 2) and 1)
                         if (sx >= sizeX || sy >= sizeY || sz >= sizeZ) {
-                            light += 255
+                            // Texels beyond the edges are empty and cold, and fully lit.
+                            sum[1] += 255
                             continue
                         }
                         val i = (sz * sizeY + sy) * sizeX + sx
-                        density += densityLight.get(i * 2).toInt() and 0xff
-                        light += densityLight.get(i * 2 + 1).toInt() and 0xff
+                        for (c in 0 until channels) {
+                            sum[c] += texels.get(i * channels + c).toInt() and 0xff
+                        }
                         color?.let {
                             for (c in 0 until 3) {
                                 colorSum[c] += SRGB_TO_LINEAR[it.get(i * 3 + c).toInt() and 0xff]
@@ -89,8 +97,9 @@ class VolumeTexture(
                         }
                     }
                     val i = (z * newSizeY + y) * newSizeX + x
-                    newDensityLight.put(i * 2, toByte(density / 8f))
-                    newDensityLight.put(i * 2 + 1, toByte(light / 8f))
+                    for (c in 0 until channels) {
+                        newTexels.put(i * channels + c, toByte(sum[c] / 8f))
+                    }
                     newColor?.let {
                         for (c in 0 until 3) {
                             it.put(i * 3 + c, toByte(VdbModel.linearToSrgb(colorSum[c] / 8f) * 255f))
@@ -100,7 +109,7 @@ class VolumeTexture(
             }
         }
         return VolumeTexture(newSizeX, newSizeY, newSizeZ, origin, factor * 2, gridTransform, maxDensity,
-            newDensityLight, newColor, centroid)
+            channels, newTexels, newColor, centroid)
     }
 
     companion object {
@@ -119,17 +128,41 @@ class VolumeTexture(
         /** Empty texels around the volume, so that its density fades to nothing at the edges of the texture. */
         private const val PADDING = 1
 
+        /** Range of blackbody temperatures (in Kelvin) that the temperature of fire is shown with. */
+        const val FIRE_MIN_KELVIN = 800.0
+        const val FIRE_MAX_KELVIN = 2500.0
+
+        /** Second radiation constant of Planck's law (hc/k), in meter-Kelvins. */
+        private const val PLANCK_C2 = 1.4388e-2
+
+        /**
+         * Emission colors of fire for temperatures from cold to the hottest (256 entries of three
+         * sRGB bytes): the color of a blackbody from [FIRE_MIN_KELVIN] to [FIRE_MAX_KELVIN], with
+         * a brightness that increases with the square of the temperature, from nothing to full.
+         */
+        val FIRE_RAMP: ByteArray by lazy {
+            val ramp = ByteArray(256 * 3)
+            for (i in 0 until 256) {
+                val t = i / 255.0
+                val color = blackbodyColor(FIRE_MIN_KELVIN + t * (FIRE_MAX_KELVIN - FIRE_MIN_KELVIN))
+                for (c in 0 until 3) {
+                    ramp[i * 3 + c] = toByte(VdbModel.linearToSrgb((color[c] * t * t).toFloat()) * 255f)
+                }
+            }
+            ramp
+        }
+
         private val SRGB_TO_LINEAR = FloatArray(256) {
             val c = it / 255f
             if (c <= 0.04045f) c / 12.92f else ((c + 0.055f) / 1.055f).pow(2.4f)
         }
 
         /**
-         * Resamples the density of a fog volume (and its color grid, if any) at the highest
-         * resolution that fits within the given number of bytes. Returns null if the volume has no
-         * density at all, or if it's too large even at the lowest resolution.
+         * Resamples the density of a fog volume (and its color and temperature grids, if any) at
+         * the highest resolution that fits within the given number of bytes. Returns null if the
+         * volume has no density at all, or if it's too large even at the lowest resolution.
          */
-        fun build(grid: VdbGrid, colorGrid: VdbGrid?, maxBytes: Long): VolumeTexture? {
+        fun build(grid: VdbGrid, colorGrid: VdbGrid?, temperatureGrid: VdbGrid?, maxBytes: Long): VolumeTexture? {
             // Find the extent of the voxels that have any density.
             val min = IntArray(3) { Int.MAX_VALUE }
             val max = IntArray(3) { Int.MIN_VALUE }
@@ -159,7 +192,11 @@ class VolumeTexture(
 
             // Reduce the resolution by powers of two until the texture fits. Texels then never
             // straddle leaves, so the density of each one can be averaged from a single leaf.
-            val bytesPerTexel = if (colorGrid != null) 5 else 2
+            // A temperature grid that's cold everywhere doesn't make anything glow.
+            val hottest = temperatureGrid?.let { maxValue(it) } ?: 0f
+            val hotGrid = temperatureGrid?.takeIf { hottest > it.background }
+            val channels = if (hotGrid != null) 3 else 2
+            val bytesPerTexel = channels + if (colorGrid != null) 3 else 0
             var log2Factor = 0
             val lo = IntArray(3)
             val size = IntArray(3)
@@ -189,18 +226,18 @@ class VolumeTexture(
             }
             val densityScale = 255f / maxDensity
 
-            val densityLight = allocate(sizeX * sizeY * sizeZ * 2)
+            val texels = allocate(sizeX * sizeY * sizeZ * channels)
             grid.forEachTile { x, y, z, log2Size, value ->
                 if (value > 0f) {
-                    val texels = (1 shl log2Size) shr log2Factor
+                    val tileTexels = (1 shl log2Size) shr log2Factor
                     val tx = (x shr log2Factor) - lo[0]
                     val ty = (y shr log2Factor) - lo[1]
                     val tz = (z shr log2Factor) - lo[2]
                     val density = toByte(value * densityScale)
-                    for (k in tz until tz + texels) {
-                        for (j in ty until ty + texels) {
-                            for (i in tx until tx + texels) {
-                                densityLight.put(((k * sizeY + j) * sizeX + i) * 2, density)
+                    for (k in tz until tz + tileTexels) {
+                        for (j in ty until ty + tileTexels) {
+                            for (i in tx until tx + tileTexels) {
+                                texels.put(((k * sizeY + j) * sizeX + i) * channels, density)
                             }
                         }
                     }
@@ -208,15 +245,36 @@ class VolumeTexture(
             }
             forEachBlock(grid, log2Factor) { x, y, z, density ->
                 if (density > 0f) {
-                    densityLight.put((((z - lo[2]) * sizeY + y - lo[1]) * sizeX + x - lo[0]) * 2, toByte(density * densityScale))
+                    texels.put((((z - lo[2]) * sizeY + y - lo[1]) * sizeX + x - lo[0]) * channels, toByte(density * densityScale))
                 }
             }
 
             val texelOrigin = IntArray(3) { lo[it] shl log2Factor }
             val textureToWorld = computeTextureToWorld(size, texelOrigin, factor, grid.transform)
-            val centroid = computeLight(size, densityLight, maxDensity, grid.transform, factor, textureToWorld)
-            val color = colorGrid?.let { sampleColors(size, densityLight, it, textureToWorld) }
-            return VolumeTexture(sizeX, sizeY, sizeZ, texelOrigin, factor, grid.transform, maxDensity, densityLight, color, centroid)
+            val centroid = computeLight(size, texels, channels, maxDensity, grid.transform, factor, textureToWorld)
+
+            // Only the temperature and color where there's density matter, since only a volume
+            // with density glows or reflects light.
+            if (hotGrid != null) {
+                val cold = hotGrid.background
+                val temperatureScale = 255f / (hottest - cold)
+                sampleAtTexels(size, texels, channels, textureToWorld, hotGrid) { i, _, temperature ->
+                    texels.put(i * channels + 2, toByte((temperature[0] - cold) * temperatureScale))
+                }
+            }
+            val color = colorGrid?.let { colorGrid ->
+                // Colors are premultiplied by the density, so that filtering the texture doesn't
+                // blend in the colors of empty texels.
+                val colors = allocate(sizeX * sizeY * sizeZ * 3)
+                sampleAtTexels(size, texels, channels, textureToWorld, colorGrid) { i, density, color ->
+                    for (c in 0 until 3) {
+                        colors.put(i * 3 + c, toByte(VdbModel.linearToSrgb(color[c].coerceIn(0f, 1f) * density) * 255f))
+                    }
+                }
+                colors
+            }
+            return VolumeTexture(sizeX, sizeY, sizeZ, texelOrigin, factor, grid.transform, maxDensity, channels, texels,
+                color, centroid)
         }
 
         /**
@@ -255,7 +313,7 @@ class VolumeTexture(
          * texel, by attenuating it through the volume along the texture axis that's closest to vertical.
          * Returns the density-weighted center of the volume, in world coordinates.
          */
-        private fun computeLight(size: IntArray, densityLight: ByteBuffer, maxDensity: Float, gridTransform: DoubleArray,
+        private fun computeLight(size: IntArray, texels: ByteBuffer, channels: Int, maxDensity: Float, gridTransform: DoubleArray,
                                  factor: Int, textureToWorld: DoubleArray): DoubleArray {
             val up = (0 until 3).maxBy { abs(gridTransform[it * 3 + 1]) }
             val upIsPositive = gridTransform[up * 3 + 1] >= 0
@@ -281,8 +339,8 @@ class VolumeTexture(
                     for (n in 0 until size[up]) {
                         val k = if (upIsPositive) size[up] - 1 - n else n
                         val i = i1 * stride[axis1] + i2 * stride[axis2] + k * stride[up]
-                        val density = densityLight.get(i * 2).toInt() and 0xff
-                        densityLight.put(i * 2 + 1, toByte(transmittance * halfTransmittance[density] * 255f))
+                        val density = texels.get(i * channels).toInt() and 0xff
+                        texels.put(i * channels + 1, toByte(transmittance * halfTransmittance[density] * 255f))
                         transmittance *= fullTransmittance[density]
                         if (density > 0) {
                             weight += density
@@ -297,30 +355,69 @@ class VolumeTexture(
         }
 
         /**
-         * Samples the color grid at the center of each texel that has any density, and returns the
-         * colors in sRGB, premultiplied by the density, so that filtering the texture doesn't blend
-         * in the colors of empty texels.
+         * Samples the given grid at the center of each texel that has any density, and calls the
+         * given function with the texel's index, its density (as a fraction), and the grid's value.
          */
-        private fun sampleColors(size: IntArray, densityLight: ByteBuffer, colorGrid: VdbGrid, textureToWorld: DoubleArray): ByteBuffer {
-            val colors = allocate(size[0] * size[1] * size[2] * 3)
-            val color = FloatArray(3)
+        private inline fun sampleAtTexels(size: IntArray, texels: ByteBuffer, channels: Int, textureToWorld: DoubleArray,
+                                          grid: VdbGrid, action: (index: Int, density: Float, value: FloatArray) -> Unit) {
+            val value = FloatArray(grid.components)
+            val m = textureToWorld
             for (z in 0 until size[2]) {
+                val w = (z + 0.5) / size[2]
                 for (y in 0 until size[1]) {
+                    val v = (y + 0.5) / size[1]
                     for (x in 0 until size[0]) {
                         val i = (z * size[1] + y) * size[0] + x
-                        val density = (densityLight.get(i * 2).toInt() and 0xff) / 255f
+                        val density = (texels.get(i * channels).toInt() and 0xff) / 255f
                         if (density == 0f) {
                             continue
                         }
-                        val position = transform(textureToWorld, (x + 0.5) / size[0], (y + 0.5) / size[1], (z + 0.5) / size[2])
-                        colorGrid.sample(position[0], position[1], position[2], color)
-                        for (c in 0 until 3) {
-                            colors.put(i * 3 + c, toByte(VdbModel.linearToSrgb(color[c].coerceIn(0f, 1f) * density) * 255f))
-                        }
+                        val u = (x + 0.5) / size[0]
+                        grid.sample(u * m[0] + v * m[3] + w * m[6] + m[9], u * m[1] + v * m[4] + w * m[7] + m[10],
+                            u * m[2] + v * m[5] + w * m[8] + m[11], value)
+                        action(i, density, value)
                     }
                 }
             }
-            return colors
+        }
+
+        /** The highest value of a scalar grid, including its tiles. */
+        private fun maxValue(grid: VdbGrid): Float {
+            var max = grid.maxValue
+            grid.forEachTile { _, _, _, _, value ->
+                if (value > max) max = value
+            }
+            return max
+        }
+
+        /**
+         * Linear sRGB color of a blackbody at the given temperature (in Kelvin), scaled so that its
+         * largest component is 1. This integrates Planck's law over the visible spectrum with the
+         * CIE 1931 color matching functions, using the analytic fit of Wyman, Sloan, and Shirley (2013).
+         */
+        fun blackbodyColor(kelvin: Double): FloatArray {
+            var x = 0.0
+            var y = 0.0
+            var z = 0.0
+            for (nm in 380..780 step 5) {
+                val lambda = nm * 1e-9
+                // Planck's law, without its constant factors, which don't affect the color.
+                val radiance = 1 / (lambda.pow(5) * (exp(PLANCK_C2 / (lambda * kelvin)) - 1))
+                x += radiance * (1.056 * lobe(nm, 599.8, 37.9, 31.0) + 0.362 * lobe(nm, 442.0, 16.0, 26.7) -
+                        0.065 * lobe(nm, 501.1, 20.4, 26.2))
+                y += radiance * (0.821 * lobe(nm, 568.8, 46.9, 40.5) + 0.286 * lobe(nm, 530.9, 16.3, 31.1))
+                z += radiance * (1.217 * lobe(nm, 437.0, 11.8, 36.0) + 0.681 * lobe(nm, 459.0, 26.0, 13.8))
+            }
+            val rgb = doubleArrayOf(3.2406 * x - 1.5372 * y - 0.4986 * z, -0.9689 * x + 1.8758 * y + 0.0415 * z,
+                0.0557 * x - 0.2040 * y + 1.0570 * z)
+            val max = rgb.max()
+            return FloatArray(3) { (rgb[it].coerceAtLeast(0.0) / max).toFloat() }
+        }
+
+        /** A Gaussian lobe with different widths below and above its mean. */
+        private fun lobe(nm: Int, mean: Double, widthBelow: Double, widthAbove: Double): Double {
+            val t = (nm - mean) / (if (nm < mean) widthBelow else widthAbove)
+            return exp(-0.5 * t * t)
         }
 
         private fun computeTextureToWorld(size: IntArray, origin: IntArray, factor: Int, gridTransform: DoubleArray): DoubleArray {

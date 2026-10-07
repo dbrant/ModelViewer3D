@@ -21,13 +21,15 @@ public class VolumeTextureTest {
 
     @Test
     public void testFullResolution() throws Exception {
-        VolumeTexture texture = build(fogSphere(), null, VolumeTexture.MAX_BYTES);
+        VolumeTexture texture = build(VolumeTexture.MAX_BYTES, fogSphere());
         assertEquals(1, texture.getFactor());
         // An empty texel of padding on each side.
         int size = MAX_INDEX - MIN_INDEX + 3;
         assertSize(texture, size);
         assertArrayEquals(new int[] {MIN_INDEX - 1, MIN_INDEX - 1, MIN_INDEX - 1}, texture.getOrigin());
         assertEquals(1f, texture.getMaxDensity(), 0f);
+        assertEquals(2, texture.getChannels());
+        assertFalse(texture.getHasTemperature());
         assertNull(texture.getColor());
 
         // This includes the middle of the sphere, which is a tile rather than a leaf.
@@ -51,7 +53,7 @@ public class VolumeTextureTest {
     @Test
     public void testReducedResolution() throws Exception {
         // Too large at full resolution (26^3 texels, with 2 bytes each), but not at half of it.
-        VolumeTexture texture = build(fogSphere(), null, 30000);
+        VolumeTexture texture = build(30000, fogSphere());
         assertEquals(2, texture.getFactor());
         int lo = (MIN_INDEX >> 1) - 1;
         int size = (MAX_INDEX >> 1) + 1 - lo + 1;
@@ -78,31 +80,31 @@ public class VolumeTextureTest {
 
     @Test
     public void testDownsampled() throws Exception {
-        VolumeTexture full = build(fogSphere(), colorGrid("Cd", false), VolumeTexture.MAX_BYTES);
+        VolumeTexture full = build(VolumeTexture.MAX_BYTES, fogSphere(), colorGrid("Cd", false), temperatureGrid("temperature"));
         VolumeTexture half = full.downsampled();
         assertEquals(2, half.getFactor());
+        assertEquals(3, half.getChannels());
         assertSize(half, (full.getSizeX() + 1) / 2);
         assertArrayEquals(full.getOrigin(), half.getOrigin());
         assertArrayEquals(full.getCentroid(), half.getCentroid(), 0);
 
-        // Each texel has the average density, light, and (linear) color of the 2x2x2 texels that it covers.
+        // Each texel has the average density, light, temperature, and (linear) color of the 2x2x2
+        // texels that it covers.
         for (int k = 0; k < half.getSizeZ(); k++) {
             for (int j = 0; j < half.getSizeY(); j++) {
                 for (int i = 0; i < half.getSizeX(); i++) {
-                    double density = 0, light = 0;
+                    double[] sum = new double[3];
                     double[] color = new double[3];
                     for (int n = 0; n < 8; n++) {
                         int fi = i * 2 + (n & 1), fj = j * 2 + ((n >> 1) & 1), fk = k * 2 + ((n >> 2) & 1);
-                        density += density(full, fi, fj, fk);
-                        light += light(full, fi, fj, fk);
                         for (int c = 0; c < 3; c++) {
+                            sum[c] += channel(full, fi, fj, fk, c);
                             color[c] += srgbToLinear(color(full, fi, fj, fk, c) / 255.0);
                         }
                     }
                     String texel = "Texel " + i + "," + j + "," + k;
-                    assertEquals(texel, density / 8, density(half, i, j, k), BYTE_TOLERANCE);
-                    assertEquals(texel, light / 8, light(half, i, j, k), BYTE_TOLERANCE);
                     for (int c = 0; c < 3; c++) {
+                        assertEquals(texel, sum[c] / 8, channel(half, i, j, k, c), BYTE_TOLERANCE);
                         assertEquals(texel, VdbModel.Companion.linearToSrgb((float) (color[c] / 8)) * 255, color(half, i, j, k, c), BYTE_TOLERANCE);
                     }
                 }
@@ -113,7 +115,7 @@ public class VolumeTextureTest {
 
     @Test
     public void testColor() throws Exception {
-        VolumeTexture texture = build(fogSphere(), colorGrid("Cd", false), VolumeTexture.MAX_BYTES);
+        VolumeTexture texture = build(VolumeTexture.MAX_BYTES, fogSphere(), colorGrid("Cd", false));
         assertEquals(1, texture.getFactor());
         assertNotNull(texture.getColor());
         int size = texture.getSizeX();
@@ -134,15 +136,53 @@ public class VolumeTextureTest {
     }
 
     @Test
+    public void testTemperature() throws Exception {
+        VolumeTexture plain = build(VolumeTexture.MAX_BYTES, fogSphere());
+        VolumeTexture texture = build(VolumeTexture.MAX_BYTES, fogSphere(), temperatureGrid("temperature"));
+        assertEquals(3, texture.getChannels());
+        assertTrue(texture.getHasTemperature());
+        assertNull(texture.getColor());
+        int size = texture.getSizeX();
+        assertSize(texture, size);
+        assertEquals(plain.getSizeX(), size);
+        float hottest = temperatureValue(31);
+        for (int k = 0; k < size; k++) {
+            for (int j = 0; j < size; j++) {
+                for (int i = 0; i < size; i++) {
+                    String texel = "Texel " + i + "," + j + "," + k;
+                    // The density and light are the same as without a temperature.
+                    assertEquals(texel, density(plain, i, j, k), density(texture, i, j, k));
+                    assertEquals(texel, light(plain, i, j, k), light(texture, i, j, k));
+                    // Temperatures are interpolated from the temperature grid at each texel with any
+                    // density, as a fraction of the way from cold to the hottest.
+                    double temperatureIndex = MIN_INDEX - 1 + j - 0.5;
+                    double expected = density(texture, i, j, k) == 0 ? 0
+                            : (temperatureValue(temperatureIndex) - TEMPERATURE_COLD) / (hottest - TEMPERATURE_COLD) * 255;
+                    assertEquals(texel, expected, channel(texture, i, j, k, 2), BYTE_TOLERANCE);
+                }
+            }
+        }
+
+        // A temperature grid that's cold everywhere is left out.
+        VdbTestWriter.Grid cold = temperatureGrid("temperature");
+        for (VdbTestWriter.Leaf leaf : cold.leaves.values()) {
+            java.util.Arrays.fill(leaf.values, TEMPERATURE_COLD - 1);
+        }
+        VolumeTexture coldTexture = build(VolumeTexture.MAX_BYTES, fogSphere(), cold);
+        assertEquals(2, coldTexture.getChannels());
+        assertFalse(coldTexture.getHasTemperature());
+    }
+
+    @Test
     public void testEmptyOrTooLarge() throws Exception {
         VdbTestWriter.Grid empty = new VdbTestWriter.Grid();
         empty.gridClass = "fog volume";
         empty.tiles = constantTiles(0);
         empty.leaves.put(List.of(0, 0, 0), new VdbTestWriter.Leaf());
-        assertNull(VolumeTexture.Companion.build(read(empty), null, VolumeTexture.MAX_BYTES));
+        assertNull(VolumeTexture.Companion.build(read(empty), null, null, VolumeTexture.MAX_BYTES));
 
         // Too large even at an eighth of the resolution (5^3 texels).
-        assertNull(VolumeTexture.Companion.build(read(fogSphere()), null, 100));
+        assertNull(VolumeTexture.Companion.build(read(fogSphere()), null, null, 100));
     }
 
     @Test
@@ -151,14 +191,54 @@ public class VolumeTextureTest {
         assertTrue(fog instanceof VdbVolumeModel);
         assertEquals("fog", ((VdbVolumeModel) fog).getGridName());
         assertNull(((VdbVolumeModel) fog).getColorGridName());
+        assertNull(((VdbVolumeModel) fog).getTemperatureGridName());
 
-        Model coloredFog = load(fogSphere(), colorGrid("Cd", false));
-        assertTrue(coloredFog instanceof VdbVolumeModel);
-        assertEquals("Cd", ((VdbVolumeModel) coloredFog).getColorGridName());
+        Model coloredFire = load(fogSphere(), colorGrid("Cd", false), temperatureGrid("temperature"));
+        assertTrue(coloredFire instanceof VdbVolumeModel);
+        assertEquals("Cd", ((VdbVolumeModel) coloredFire).getColorGridName());
+        assertEquals("temperature", ((VdbVolumeModel) coloredFire).getTemperatureGridName());
 
         Model levelSet = load(levelSetSphere());
         assertTrue(levelSet instanceof VdbModel);
         assertEquals("sphere", ((VdbModel) levelSet).getGridName());
+    }
+
+    @Test
+    public void testBlackbodyColor() {
+        // Compared to Mitchell Charity's table of blackbody colors (CIE 1931 2-degree observer, sRGB).
+        assertSrgbEquals(new int[] {255, 137, 18}, VolumeTexture.Companion.blackbodyColor(2000), 8);
+        assertSrgbEquals(new int[] {255, 180, 107}, VolumeTexture.Companion.blackbodyColor(3000), 8);
+        // The white point of sRGB is about 6500K.
+        assertSrgbEquals(new int[] {255, 255, 255}, VolumeTexture.Companion.blackbodyColor(6500), 8);
+
+        // Hotter is less red.
+        float[] previous = null;
+        for (int kelvin = 800; kelvin <= 3000; kelvin += 100) {
+            float[] color = VolumeTexture.Companion.blackbodyColor(kelvin);
+            assertEquals(1f, color[0], 0f);
+            if (previous != null) {
+                assertTrue("Green at " + kelvin + "K", color[1] > previous[1]);
+                assertTrue("Blue at " + kelvin + "K", color[2] >= previous[2]);
+            }
+            previous = color;
+        }
+    }
+
+    @Test
+    public void testFireRamp() {
+        byte[] ramp = VolumeTexture.Companion.getFIRE_RAMP();
+        assertEquals(256 * 3, ramp.length);
+        // From nothing when cold, getting brighter, to the full color of the hottest blackbody.
+        for (int c = 0; c < 3; c++) {
+            assertEquals(0, ramp[c]);
+        }
+        float[] hottest = VolumeTexture.Companion.blackbodyColor(VolumeTexture.FIRE_MAX_KELVIN);
+        for (int c = 0; c < 3; c++) {
+            assertEquals(VdbModel.Companion.linearToSrgb(hottest[c]) * 255, ramp[255 * 3 + c] & 0xff, BYTE_TOLERANCE);
+        }
+        for (int i = 1; i < 256; i++) {
+            assertTrue("Entry " + i, (ramp[i * 3] & 0xff) >= (ramp[i * 3 - 3] & 0xff));
+        }
     }
 
     @Test
@@ -215,6 +295,12 @@ public class VolumeTextureTest {
         }
     }
 
+    private static void assertSrgbEquals(int[] expected, float[] linear, int tolerance) {
+        for (int c = 0; c < 3; c++) {
+            assertEquals("Component " + c, expected[c], VdbModel.Companion.linearToSrgb(linear[c]) * 255, tolerance);
+        }
+    }
+
     private static double fogDensity(int x, int y, int z) {
         return Math.max(0, Math.min(1, -distance(x, y, z) / BACKGROUND));
     }
@@ -224,11 +310,15 @@ public class VolumeTextureTest {
     }
 
     private static int density(VolumeTexture texture, int i, int j, int k) {
-        return texture.getDensityLight().get(index(texture, i, j, k) * 2) & 0xff;
+        return channel(texture, i, j, k, 0);
     }
 
     private static int light(VolumeTexture texture, int i, int j, int k) {
-        return texture.getDensityLight().get(index(texture, i, j, k) * 2 + 1) & 0xff;
+        return channel(texture, i, j, k, 1);
+    }
+
+    private static int channel(VolumeTexture texture, int i, int j, int k, int channel) {
+        return texture.getTexels().get(index(texture, i, j, k) * texture.getChannels() + channel) & 0xff;
     }
 
     private static int color(VolumeTexture texture, int i, int j, int k, int component) {
@@ -245,11 +335,11 @@ public class VolumeTextureTest {
         assertEquals(size, texture.getSizeZ());
     }
 
-    private static VolumeTexture build(VdbTestWriter.Grid grid, VdbTestWriter.Grid colorGrid, long maxBytes) throws IOException {
-        List<VdbTestWriter.Grid> grids = colorGrid != null ? List.of(grid, colorGrid) : List.of(grid);
-        VdbReader.Grids result = new VdbReader(new ByteArrayInputStream(VdbTestWriter.write(grids))).read();
-        assertEquals(colorGrid != null, result.getColor() != null);
-        VolumeTexture texture = VolumeTexture.Companion.build(result.getSurface(), result.getColor(), maxBytes);
+    /** Builds the texture of the first grid, along with the color and temperature grids among the others. */
+    private static VolumeTexture build(long maxBytes, VdbTestWriter.Grid... grids) throws IOException {
+        VdbReader.Grids result = new VdbReader(new ByteArrayInputStream(VdbTestWriter.write(List.of(grids)))).read();
+        assertEquals(grids[0].name, result.getSurface().getName());
+        VolumeTexture texture = VolumeTexture.Companion.build(result.getSurface(), result.getColor(), result.getTemperature(), maxBytes);
         assertNotNull(texture);
         return texture;
     }

@@ -4,8 +4,8 @@ import com.dmitrybrant.modelviewer.Model
 import java.io.InputStream
 
 /*
-* Loads an OpenVDB file as the kind of model that suits it: fog volumes (e.g. smoke or clouds) are
-* rendered as volumes, and level sets are shown as their surface.
+* Loads an OpenVDB file as the kind of model that suits it: fog volumes (e.g. smoke, clouds, or
+* fire) are rendered as volumes, and level sets are shown as their surface.
 *
 * Copyright 2026 Dmitry Brant. All rights reserved.
 *
@@ -33,10 +33,11 @@ object VdbLoader {
         val grid = grids.surface
         if (!grid.isLevelSet) {
             // A volume that's too large to resample is shown as a surface instead.
-            VolumeTexture.build(grid, grids.color, VolumeTexture.MAX_BYTES)?.let { volume ->
+            VolumeTexture.build(grid, grids.color, grids.temperature, VolumeTexture.MAX_BYTES)?.let { volume ->
                 val gridName = grid.name
                 val colorGridName = grids.color?.name
-                return { VdbVolumeModel(volume, gridName, colorGridName) }
+                val temperatureGridName = grids.temperature?.name?.takeIf { volume.hasTemperature }
+                return { VdbVolumeModel(volume, gridName, colorGridName, temperatureGridName) }
             }
         }
         val surface = VdbModel.extractSurface(grids)

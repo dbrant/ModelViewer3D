@@ -13,8 +13,8 @@ import java.util.zip.Inflater
 
 /*
 * Reader for OpenVDB (.vdb) files. Reads the first scalar (float or double) grid in the file,
-* which is enough for visualizing level sets and fog volumes, and a vector grid with the color
-* of the volume, if there is one.
+* which is enough for visualizing level sets and fog volumes, and grids with the color and the
+* temperature of the volume, if there are any.
 *
 * The stream is read strictly sequentially, so it doesn't need to support seeking.
 *
@@ -50,7 +50,7 @@ class VdbReader(inputStream: InputStream) {
     private val blosc = Blosc()
 
     /** The grids that were read from a file. */
-    class Grids(val surface: VdbGrid, val color: VdbGrid?)
+    class Grids(val surface: VdbGrid, val color: VdbGrid?, val temperature: VdbGrid?)
 
     /**
      * Reads the first scalar grid in the file.
@@ -58,8 +58,9 @@ class VdbReader(inputStream: InputStream) {
     fun readGrid() = read().surface
 
     /**
-     * Reads the first scalar grid in the file, and a vector grid that holds the colors of the
-     * volume (with a name like "Cd" or "color"), if there is one.
+     * Reads the first scalar grid in the file (other than a temperature grid), a vector grid that
+     * holds the colors of the volume (with a name like "Cd" or "color"), and a scalar grid named
+     * "temperature", if there are any.
      */
     fun read(): Grids {
         try {
@@ -83,6 +84,7 @@ class VdbReader(inputStream: InputStream) {
             val skippedTypes = mutableListOf<String>()
             var surface: VdbGrid? = null
             var color: VdbGrid? = null
+            var temperature: VdbGrid? = null
             for (i in 0 until gridCount) {
                 // The unique name may have a suffix that disambiguates grids with the same name.
                 val name = stream.readString().substringBefore('\u001e')
@@ -95,21 +97,23 @@ class VdbReader(inputStream: InputStream) {
                 val endPos = stream.readLong()
 
                 val type = parseGridType(gridType)
-                val isSurface = surface == null && type?.components == 1
+                val isTemperatureName = name.lowercase() == TEMPERATURE_GRID_NAME
+                val isSurface = surface == null && type?.components == 1 && !isTemperatureName
                 val isColor = color == null && type?.components == 3 && name.lowercase() in COLOR_GRID_NAMES
-                if (type != null && instanceParent.isEmpty() && (isSurface || isColor)) {
+                val isTemperature = temperature == null && type?.components == 1 && isTemperatureName
+                if (type != null && instanceParent.isEmpty() && (isSurface || isColor || isTemperature)) {
                     if (hasGridOffsets) {
                         stream.seek(gridPos)
                     }
                     valueSize = type.valueSize
                     components = type.components
                     val grid = readGrid(name, type.log2Dims)
-                    if (isSurface) {
-                        surface = grid
-                    } else {
-                        color = grid
+                    when {
+                        isSurface -> surface = grid
+                        isColor -> color = grid
+                        else -> temperature = grid
                     }
-                    if (surface != null && color != null) {
+                    if (surface != null && color != null && temperature != null) {
                         break
                     }
                     if (hasGridOffsets) {
@@ -124,8 +128,13 @@ class VdbReader(inputStream: InputStream) {
                 }
                 stream.seek(endPos)
             }
+            if (surface == null && temperature != null) {
+                // Without any other grid, the temperature is shown as the volume.
+                surface = temperature
+                temperature = null
+            }
             return Grids(surface ?: throw IOException("No supported grids found in file. Only float and double grids " +
-                    "are supported" + (if (skippedTypes.isNotEmpty()) " (found: ${skippedTypes.joinToString()})." else ".")), color)
+                    "are supported" + (if (skippedTypes.isNotEmpty()) " (found: ${skippedTypes.joinToString()})." else ".")), color, temperature)
         } finally {
             inflater?.end()
         }
@@ -575,6 +584,9 @@ class VdbReader(inputStream: InputStream) {
 
         /** Names of vector grids that hold the colors of a volume (lowercase). */
         private val COLOR_GRID_NAMES = setOf("cd", "color", "colour", "albedo")
+
+        /** Name of a scalar grid that holds the temperature of a volume, such as fire (lowercase). */
+        private const val TEMPERATURE_GRID_NAME = "temperature"
 
         private const val COMPRESS_ZIP = 0x1
         private const val COMPRESS_ACTIVE_MASK = 0x2

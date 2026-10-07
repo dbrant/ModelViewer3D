@@ -14,7 +14,8 @@ import java.nio.FloatBuffer
 /*
 * Displays an OpenVDB fog volume (such as smoke or a cloud) by ray marching through its density
 * on the GPU, which shows all of its soft, semi-transparent detail. The volume is lit from above,
-* with shadows that it casts on itself, and from the direction of the camera.
+* with shadows that it casts on itself, and from the direction of the camera. If the volume has a
+* temperature, its hot parts (such as fire) glow with the color of their temperature.
 *
 * Copyright 2026 Dmitry Brant. All rights reserved.
 *
@@ -30,10 +31,12 @@ import java.nio.FloatBuffer
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, val colorGridName: String?) : Model() {
+class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, val colorGridName: String?,
+                     val temperatureGridName: String?) : Model() {
     // GL objects, which belong to the context in which setup() was last called.
-    private var densityTexture = 0
+    private var volumeTexture = 0
     private var colorTexture = 0
+    private var fireRampTexture = 0
     private var cubeBuffer: FloatBuffer? = null
 
     // Properties of the texture that was uploaded, which may have a lower resolution than the volume.
@@ -69,8 +72,13 @@ class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, va
             texture = texture.downsampled()
         }
         // This is called whenever a new GL context is created, so any previous textures are already gone.
-        densityTexture = uploadTexture(texture, texture.densityLight, GLES30.GL_RG8, GLES30.GL_RG)
+        volumeTexture = if (texture.hasTemperature) {
+            uploadTexture(texture, texture.texels, GLES30.GL_RGB8, GLES30.GL_RGB)
+        } else {
+            uploadTexture(texture, texture.texels, GLES30.GL_RG8, GLES30.GL_RG)
+        }
         colorTexture = texture.color?.let { uploadTexture(texture, it, GLES30.GL_SRGB8, GLES30.GL_RGB) } ?: 0
+        fireRampTexture = if (texture.hasTemperature) uploadFireRamp() else 0
         setTextureTransform(texture)
         if (cubeBuffer == null) {
             cubeBuffer = MeshModel.allocateFloats(CUBE_VERTICES)
@@ -96,6 +104,24 @@ class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, va
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_R, GLES30.GL_CLAMP_TO_EDGE)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, 0)
+        return ids[0]
+    }
+
+    private fun uploadFireRamp(): Int {
+        val ids = IntArray(1)
+        GLES30.glGenTextures(1, ids, 0)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, ids[0])
+        GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 1)
+        val ramp = VolumeTexture.FIRE_RAMP
+        val pixels = ByteBuffer.allocateDirect(ramp.size).put(ramp)
+        pixels.position(0)
+        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_SRGB8, ramp.size / 3, 1, 0,
+            GLES30.GL_RGB, GLES30.GL_UNSIGNED_BYTE, pixels)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
         return ids[0]
     }
 
@@ -140,7 +166,7 @@ class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, va
     }
 
     override fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray, light: Light) {
-        if (densityTexture == 0) {
+        if (volumeTexture == 0) {
             return
         }
         GLES30.glUseProgram(glProgram)
@@ -158,12 +184,16 @@ class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, va
         GLES30.glUniformMatrix3fv(GLES30.glGetUniformLocation(glProgram, "u_TextureToWorld"), 1, false, textureToWorld, 0)
         GLES30.glUniform1f(GLES30.glGetUniformLocation(glProgram, "u_DensityScale"), volume.maxDensity * VolumeTexture.EXTINCTION_SCALE)
         GLES30.glUniform1i(GLES30.glGetUniformLocation(glProgram, "u_HasColor"), if (colorTexture != 0) 1 else 0)
+        GLES30.glUniform1f(GLES30.glGetUniformLocation(glProgram, "u_Albedo"), if (volume.hasTemperature) SMOKE_ALBEDO else 1f)
         GLES30.glUniform1i(GLES30.glGetUniformLocation(glProgram, "u_Volume"), 0)
         GLES30.glUniform1i(GLES30.glGetUniformLocation(glProgram, "u_Color"), 1)
+        GLES30.glUniform1i(GLES30.glGetUniformLocation(glProgram, "u_FireRamp"), 2)
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE2)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, fireRampTexture)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE1)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, colorTexture)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, densityTexture)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, volumeTexture)
 
         // Draw the back faces of the box, so that the rays through the volume are drawn even when
         // the camera is inside it. A transform that mirrors the box turns its faces inside out.
@@ -190,11 +220,16 @@ class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, va
         GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, 0)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE1)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, 0)
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE2)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
     }
 
     companion object {
         private const val TAG = "VdbVolumeModel"
+
+        /** The smoke of fire is sooty, which makes it much darker than a cloud. */
+        private const val SMOKE_ALBEDO = 0.5f
 
         /**
          * The faces of the unit cube, as quads whose corners are counterclockwise when seen from

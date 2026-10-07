@@ -22,6 +22,9 @@ public class VdbModelTest {
     private static final List<Integer> ROOT_TILE = List.of(8192, 0, 0);
     // The color grid is offset by half a voxel from the surface grid, so that its values are interpolated.
     static final double[] COLOR_TRANSLATION = {TRANSLATION[0] + VOXEL_SIZE / 2, TRANSLATION[1], TRANSLATION[2]};
+    // The temperature grid is offset by half a voxel along y, so that its values are interpolated.
+    static final double[] TEMPERATURE_TRANSLATION = {TRANSLATION[0], TRANSLATION[1] + VOXEL_SIZE / 2, TRANSLATION[2]};
+    static final float TEMPERATURE_COLD = 5;
 
     @Test
     public void testLevelSetBlosc() throws Exception {
@@ -164,6 +167,23 @@ public class VdbModelTest {
                 }
             }
         }
+    }
+
+    @Test
+    public void testTemperatureGrid() throws Exception {
+        // The temperature grid may come before or after the density grid, and isn't mistaken for it.
+        for (List<VdbTestWriter.Grid> grids : List.of(List.of(temperatureGrid("temperature"), fogSphere()),
+                List.of(fogSphere(), colorGrid("Cd", false), temperatureGrid("Temperature")))) {
+            VdbReader.Grids result = new VdbReader(new ByteArrayInputStream(VdbTestWriter.write(grids))).read();
+            assertEquals("fog", result.getSurface().getName());
+            assertNotNull(result.getTemperature());
+            assertEquals(TEMPERATURE_COLD, result.getTemperature().getBackground(), 0f);
+        }
+
+        // Without any other grid, the temperature is shown as the volume.
+        VdbReader.Grids result = new VdbReader(new ByteArrayInputStream(VdbTestWriter.write(List.of(temperatureGrid("temperature"))))).read();
+        assertEquals("temperature", result.getSurface().getName());
+        assertNull(result.getTemperature());
     }
 
     @Test
@@ -312,6 +332,34 @@ public class VdbModelTest {
                         for (int c = 0; c < 3; c++) {
                             leaf.values[i * 3 + c] = colorValue(xyz[c], c);
                         }
+                    }
+                    grid.leaves.put(List.of(ox, oy, oz), leaf);
+                }
+            }
+        }
+        return grid;
+    }
+
+    /** The temperature at the given index-space y coordinate of the temperature grid, which rises along the y axis. */
+    static float temperatureValue(double y) {
+        return (float) (TEMPERATURE_COLD + (y + 24) / 2);
+    }
+
+    /** A scalar grid that covers the sphere, with all voxels active, whose temperature rises along the y axis. */
+    static VdbTestWriter.Grid temperatureGrid(String name) {
+        VdbTestWriter.Grid grid = new VdbTestWriter.Grid();
+        grid.name = name;
+        grid.background = TEMPERATURE_COLD;
+        grid.scale = new double[] {VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE};
+        grid.translation = TEMPERATURE_TRANSLATION;
+        grid.tiles = constantTiles(TEMPERATURE_COLD);
+        for (int ox = -24; ox < 32; ox += 8) {
+            for (int oy = -24; oy < 32; oy += 8) {
+                for (int oz = -24; oz < 32; oz += 8) {
+                    VdbTestWriter.Leaf leaf = new VdbTestWriter.Leaf();
+                    for (int i = 0; i < 512; i++) {
+                        leaf.active[i] = true;
+                        leaf.values[i] = temperatureValue(oy + ((i >> 3) & 7));
                     }
                     grid.leaves.put(List.of(ox, oy, oz), leaf);
                 }

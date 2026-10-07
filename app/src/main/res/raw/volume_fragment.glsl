@@ -1,12 +1,18 @@
 #version 300 es
 precision highp float;
 precision mediump sampler3D;
+precision mediump sampler2D;
 
-// Density of each texel (as a fraction of the density scale), and the fraction of the light from above that reaches it.
+// Density of each texel (as a fraction of the density scale), the fraction of the light from above
+// that reaches it, and its temperature (from cold to the hottest), if the volume has one.
 uniform sampler3D u_Volume;
 // Color of each texel, premultiplied by its density.
 uniform sampler3D u_Color;
 uniform bool u_HasColor;
+// Fraction of the light that the volume reflects, when it has no colors.
+uniform float u_Albedo;
+// Color of the light that fire emits, for each temperature.
+uniform sampler2D u_FireRamp;
 // Position of the camera, in texture coordinates.
 uniform vec3 u_CameraPos;
 uniform vec3 u_TextureSize;
@@ -24,6 +30,7 @@ const float MIN_TRANSMITTANCE = 0.01;
 const float AMBIENT_LIGHT = 0.15;
 const float TOP_LIGHT = 0.75;
 const float CAMERA_LIGHT = 0.35;
+const float EMISSION = 4.0;
 
 /*
 Dmitry Brant, 2026
@@ -47,13 +54,17 @@ void main()
     float transmittance = 1.0;
     for (int i = 0; i < MAX_STEPS && t < 1.0; i++) {
         vec3 pos = u_CameraPos + dir * t;
-        vec2 voxel = textureLod(u_Volume, pos, 0.0).rg;
+        vec3 voxel = textureLod(u_Volume, pos, 0.0).rgb;
         if (voxel.r > 0.0) {
             float alpha = 1.0 - exp(-voxel.r * stepDensity);
-            vec3 albedo = u_HasColor ? clamp(textureLod(u_Color, pos, 0.0).rgb / voxel.r, 0.0, 1.0) : vec3(1.0);
+            vec3 albedo = u_HasColor ? clamp(textureLod(u_Color, pos, 0.0).rgb / voxel.r, 0.0, 1.0) : vec3(u_Albedo);
             // Light from above (attenuated by the volume above this point), from the camera
             // (attenuated by the volume in front of it), and ambient light.
             vec3 light = albedo * (AMBIENT_LIGHT + TOP_LIGHT * voxel.g + CAMERA_LIGHT * transmittance);
+            if (voxel.b > 0.0) {
+                // Hot parts of the volume glow, as much as they absorb light (by Kirchhoff's law).
+                light += EMISSION * textureLod(u_FireRamp, vec2(voxel.b * (255.0 / 256.0) + 0.5 / 256.0, 0.5), 0.0).rgb;
+            }
             color += transmittance * alpha * light;
             transmittance *= 1.0 - alpha;
             if (transmittance < MIN_TRANSMITTANCE) {
