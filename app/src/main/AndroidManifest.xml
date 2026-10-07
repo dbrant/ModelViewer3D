@@ -38,53 +38,116 @@
                 <category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
             </intent-filter>
 
+            <!-- STL files have MIME types that Android and other apps know (under various names), so
+                 they're recognized wherever they're opened from, even when their names are unknown. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="http"/>
-                <data android:scheme="https"/>
-                <data android:host="*"/>
-                <data android:pathPattern=".*\\.stl"/>
-                <data android:pathPattern=".*\\.obj"/>
-
+                <data android:scheme="content" />
+                <data android:mimeType="application/vnd.ms-pki.stl" />
+                <data android:mimeType="application/vnd.stl" />
+                <data android:mimeType="application/stl" />
+                <data android:mimeType="application/sla" />
+                <data android:mimeType="model/stl" />
             </intent-filter>
 
+            <!-- Android doesn't know the MIME types of PLY and VDB files, so file managers usually open
+                 them as application/octet-stream. Instead, models are recognized by the extensions of
+                 their names, whatever their MIME types, when their URIs contain their names (as when
+                 they're opened from a folder in a file manager).
+                 A path pattern matches ".*" only up to the first occurrence of the character after it,
+                 so there's a pattern for each number of dots before the extension. Newer versions of
+                 Android also match the suffix of the path. Extensions may be in lowercase or uppercase. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <!-- Account for several different MIME types provided from various external apps -->
-                <data android:scheme="content"/>
-                <data android:mimeType="application/vnd.stl"/>
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathSuffix=".stl" />
+                <data android:pathPattern=".*\\.stl" />
+                <data android:pathPattern=".*\\..*\\.stl" />
+                <data android:pathPattern=".*\\..*\\..*\\.stl" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.stl" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.stl" />
+                <data android:pathSuffix=".ply" />
+                <data android:pathPattern=".*\\.ply" />
+                <data android:pathPattern=".*\\..*\\.ply" />
+                <data android:pathPattern=".*\\..*\\..*\\.ply" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.ply" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.ply" />
+                <data android:pathSuffix=".vdb" />
+                <data android:pathPattern=".*\\.vdb" />
+                <data android:pathPattern=".*\\..*\\.vdb" />
+                <data android:pathPattern=".*\\..*\\..*\\.vdb" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.vdb" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.vdb" />
+                <data android:pathSuffix=".STL" />
+                <data android:pathPattern=".*\\.STL" />
+                <data android:pathPattern=".*\\..*\\.STL" />
+                <data android:pathPattern=".*\\..*\\..*\\.STL" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.STL" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.STL" />
+                <data android:pathSuffix=".PLY" />
+                <data android:pathPattern=".*\\.PLY" />
+                <data android:pathPattern=".*\\..*\\.PLY" />
+                <data android:pathPattern=".*\\..*\\..*\\.PLY" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.PLY" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.PLY" />
+                <data android:pathSuffix=".VDB" />
+                <data android:pathPattern=".*\\.VDB" />
+                <data android:pathPattern=".*\\..*\\.VDB" />
+                <data android:pathPattern=".*\\..*\\..*\\.VDB" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.VDB" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.VDB" />
             </intent-filter>
 
+            <!-- The same, for files that are opened without a MIME type. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <!-- Account for several different MIME types provided from various external apps -->
-                <data android:scheme="content"/>
-                <data android:mimeType="application/vnd.ms-pki.stl"/>
-            </intent-filter>
-
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <!-- Account for several different MIME types provided from various external apps -->
-                <data android:scheme="content"/>
-                <data android:mimeType="application/stl"/>
-            </intent-filter>
-
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:mimeType="*/*"
-                    android:host="*"
-                    android:pathPattern=".*\\.stl"
-                    android:scheme="file"/>
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:pathSuffix=".stl" />
+                <data android:pathPattern=".*\\.stl" />
+                <data android:pathPattern=".*\\..*\\.stl" />
+                <data android:pathPattern=".*\\..*\\..*\\.stl" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.stl" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.stl" />
+                <data android:pathSuffix=".ply" />
+                <data android:pathPattern=".*\\.ply" />
+                <data android:pathPattern=".*\\..*\\.ply" />
+                <data android:pathPattern=".*\\..*\\..*\\.ply" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.ply" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.ply" />
+                <data android:pathSuffix=".vdb" />
+                <data android:pathPattern=".*\\.vdb" />
+                <data android:pathPattern=".*\\..*\\.vdb" />
+                <data android:pathPattern=".*\\..*\\..*\\.vdb" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.vdb" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.vdb" />
+                <data android:pathSuffix=".STL" />
+                <data android:pathPattern=".*\\.STL" />
+                <data android:pathPattern=".*\\..*\\.STL" />
+                <data android:pathPattern=".*\\..*\\..*\\.STL" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.STL" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.STL" />
+                <data android:pathSuffix=".PLY" />
+                <data android:pathPattern=".*\\.PLY" />
+                <data android:pathPattern=".*\\..*\\.PLY" />
+                <data android:pathPattern=".*\\..*\\..*\\.PLY" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.PLY" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.PLY" />
+                <data android:pathSuffix=".VDB" />
+                <data android:pathPattern=".*\\.VDB" />
+                <data android:pathPattern=".*\\..*\\.VDB" />
+                <data android:pathPattern=".*\\..*\\..*\\.VDB" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.VDB" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.VDB" />
             </intent-filter>
         </activity>
 
