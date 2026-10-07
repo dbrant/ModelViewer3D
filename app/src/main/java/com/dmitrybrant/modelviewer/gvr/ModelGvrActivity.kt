@@ -58,6 +58,8 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
         binding = ActivityGvrBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // The context version needs to be set first, since the config chooser picks configs that support it.
+        binding.gvrView.setEGLContextClientVersion(3)
         binding.gvrView.setEGLConfigChooser(8, 8, 8, 8, 16, 8)
         binding.gvrView.setRenderer(this)
         binding.gvrView.setTransitionViewEnabled(true)

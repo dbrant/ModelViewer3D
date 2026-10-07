@@ -30,7 +30,7 @@ import com.dmitrybrant.modelviewer.obj.ObjModel
 import com.dmitrybrant.modelviewer.ply.PlyModel
 import com.dmitrybrant.modelviewer.stl.StlModel
 import com.dmitrybrant.modelviewer.util.Util.closeSilently
-import com.dmitrybrant.modelviewer.vdb.VdbModel
+import com.dmitrybrant.modelviewer.vdb.VdbLoader
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
@@ -249,7 +249,7 @@ class MainActivity : AppCompatActivity() {
                                     PlyModel(stream)
                                 }
                                 fileName.lowercase(Locale.ROOT).endsWith(".vdb") -> {
-                                    VdbModel(stream)
+                                    VdbLoader.load(stream)
                                 }
                                 else -> {
                                     // assume it's STL.

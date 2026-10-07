@@ -4,8 +4,9 @@ import kotlin.math.floor
 
 /*
 * An OpenVDB grid of scalar or vector values, flattened into the parts needed for extracting
-* a surface and sampling colors: the voxel values of the leaf nodes, plus the tile values of the
-* internal and root nodes, which provide values for regions that have no leaf nodes.
+* a surface, resampling a volume, and sampling colors: the voxel values of the leaf nodes, plus
+* the tile values of the internal and root nodes, which provide values for regions that have no
+* leaf nodes.
 *
 * Copyright 2026 Dmitry Brant. All rights reserved.
 *
@@ -84,6 +85,37 @@ class VdbGrid(
         }
         val tile = rootTiles[packKey(x shr rootChildLog2, y shr rootChildLog2, z shr rootChildLog2)] ?: backgroundValue
         tile.copyInto(value)
+    }
+
+    /**
+     * Calls the given function for each tile of the internal nodes (a region with a single value,
+     * where there's no child node) whose value (in its first component) differs from the background,
+     * with the tile's origin, log2 size, and value. Tiles of the root node, which are enormous, aren't included.
+     */
+    fun forEachTile(action: (x: Int, y: Int, z: Int, log2Size: Int, value: Float) -> Unit) {
+        for ((levelIndex, level) in internalLevels.withIndex()) {
+            val childLog2 = level.totalLog2 - level.log2
+            val children = if (levelIndex == 0) leaves else internalLevels[levelIndex - 1].nodes
+            val mask = (1 shl level.log2) - 1
+            for ((key, values) in level.nodes) {
+                val originX = unpackKeyX(key) shl level.totalLog2
+                val originY = unpackKeyY(key) shl level.totalLog2
+                val originZ = unpackKeyZ(key) shl level.totalLog2
+                for (i in 0 until (1 shl (3 * level.log2))) {
+                    val value = values[i * components]
+                    if (value == background) {
+                        continue
+                    }
+                    val x = originX + (((i shr (2 * level.log2)) and mask) shl childLog2)
+                    val y = originY + (((i shr level.log2) and mask) shl childLog2)
+                    val z = originZ + ((i and mask) shl childLog2)
+                    // The values of child nodes' positions aren't meaningful.
+                    if (!children.containsKey(packKey(x shr childLog2, y shr childLog2, z shr childLog2))) {
+                        action(x, y, z, childLog2, value)
+                    }
+                }
+            }
+        }
     }
 
     /**

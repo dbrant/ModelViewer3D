@@ -14,14 +14,14 @@ import static org.junit.Assert.*;
 
 public class VdbModelTest {
     // A sphere centered in the middle of the leaf at the origin, so that the leaf is an interior tile.
-    private static final double CENTER = 3.5;
-    private static final double RADIUS = 12.0;
-    private static final double VOXEL_SIZE = 0.5;
-    private static final double[] TRANSLATION = {1, 2, 3};
-    private static final float BACKGROUND = (float) (3 * VOXEL_SIZE);
+    static final double CENTER = 3.5;
+    static final double RADIUS = 12.0;
+    static final double VOXEL_SIZE = 0.5;
+    static final double[] TRANSLATION = {1, 2, 3};
+    static final float BACKGROUND = (float) (3 * VOXEL_SIZE);
     private static final List<Integer> ROOT_TILE = List.of(8192, 0, 0);
     // The color grid is offset by half a voxel from the surface grid, so that its values are interpolated.
-    private static final double[] COLOR_TRANSLATION = {TRANSLATION[0] + VOXEL_SIZE / 2, TRANSLATION[1], TRANSLATION[2]};
+    static final double[] COLOR_TRANSLATION = {TRANSLATION[0] + VOXEL_SIZE / 2, TRANSLATION[1], TRANSLATION[2]};
 
     @Test
     public void testLevelSetBlosc() throws Exception {
@@ -202,7 +202,7 @@ public class VdbModelTest {
         }
     }
 
-    private static VdbGrid read(VdbTestWriter.Grid grid) throws IOException {
+    static VdbGrid read(VdbTestWriter.Grid grid) throws IOException {
         return new VdbReader(new ByteArrayInputStream(VdbTestWriter.write(List.of(grid)))).readGrid();
     }
 
@@ -273,12 +273,12 @@ public class VdbModelTest {
     }
 
     /** Signed distance from the sphere, in world units. */
-    private static double distance(int x, int y, int z) {
+    static double distance(int x, int y, int z) {
         double dx = x - CENTER, dy = y - CENTER, dz = z - CENTER;
         return (Math.sqrt(dx * dx + dy * dy + dz * dz) - RADIUS) * VOXEL_SIZE;
     }
 
-    private static VdbTestWriter.Grid levelSetSphere() {
+    static VdbTestWriter.Grid levelSetSphere() {
         VdbTestWriter.Grid grid = sphereGrid("sphere", "level set", (x, y, z) -> {
             double d = distance(x, y, z);
             return (float) Math.max(-BACKGROUND, Math.min(BACKGROUND, d));
@@ -289,12 +289,12 @@ public class VdbModelTest {
     }
 
     /** The linear color at the given index-space position of the color grid, which varies along each axis. */
-    private static float colorValue(double index, int component) {
+    static float colorValue(double index, int component) {
         return (float) ((index + 16 + component) / 40);
     }
 
     /** A vector grid that covers the sphere, with all voxels active. */
-    private static VdbTestWriter.Grid colorGrid(String name, boolean half) {
+    static VdbTestWriter.Grid colorGrid(String name, boolean half) {
         VdbTestWriter.Grid grid = new VdbTestWriter.Grid();
         grid.name = name;
         grid.valueType = "vec3s";
@@ -320,7 +320,7 @@ public class VdbModelTest {
         return grid;
     }
 
-    private static VdbTestWriter.Grid fogSphere() {
+    static VdbTestWriter.Grid fogSphere() {
         VdbTestWriter.Grid grid = sphereGrid("fog", "fog volume", (x, y, z) ->
                 (float) Math.max(0, Math.min(1, -distance(x, y, z) / BACKGROUND)),
                 (x, y, z) -> distance(x, y, z) < 0);
@@ -375,7 +375,7 @@ public class VdbModelTest {
         return grid;
     }
 
-    private static VdbTestWriter.TileFunction constantTiles(float value) {
+    static VdbTestWriter.TileFunction constantTiles(float value) {
         return new VdbTestWriter.TileFunction() {
             @Override
             public float value(int x, int y, int z, int log2Size) {

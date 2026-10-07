@@ -8,7 +8,8 @@ import kotlin.math.pow
 /*
 * Displays an OpenVDB volume as a surface mesh. Level sets are shown as their zero isosurface,
 * and fog volumes (e.g. smoke or clouds) are shown as the isosurface at a fixed fraction of their
-* maximum density. If the file also has a color grid, the surface is colored with it.
+* maximum density (when they can't be rendered as volumes; see VdbLoader). If the file also has
+* a color grid, the surface is colored with it.
 *
 * Copyright 2026 Dmitry Brant. All rights reserved.
 *
@@ -24,53 +25,25 @@ import kotlin.math.pow
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-class VdbModel(inputStream: InputStream) : MeshModel() {
-    var gridName = ""
-        private set
-    var colorGridName: String? = null
-        private set
+class VdbModel(surface: Surface) : MeshModel() {
+    /**
+     * The surface of a volume and its colors, which are extracted before creating the model, so
+     * that the voxel data can be released before the vertex buffers are created.
+     */
+    class Surface(val mesh: SurfaceNets.Mesh, val colors: FloatArray?, val gridName: String, val colorGridName: String?)
+
+    val gridName = surface.gridName
+    val colorGridName = surface.colorGridName
+
+    constructor(inputStream: InputStream) : this(extractSurface(VdbReader(inputStream).read()))
 
     init {
-        val mesh = extractMesh(inputStream)
+        val mesh = surface.mesh
         if (mesh.indexCount == 0) {
             throw IOException("No surface found in volume.")
         }
         setMesh(mesh)
-    }
-
-    /**
-     * Reads the volume and extracts its surface at full resolution (and its colors, if any).
-     * This is kept separate from creating the vertex buffers, so that the voxel data can be released before then.
-     */
-    private fun extractMesh(inputStream: InputStream): SurfaceNets.Mesh {
-        val grids = VdbReader(inputStream).read()
-        val grid = grids.surface
-        gridName = grid.name
-        val surfaceNets = if (grid.isLevelSet) {
-            SurfaceNets(grid, 0f, false)
-        } else {
-            SurfaceNets(grid, grid.maxValue * FOG_ISO_FRACTION, true)
-        }
-        val mesh = surfaceNets.extract()
-        grids.color?.let {
-            colorGridName = it.name
-            colorBuffer = allocateFloats(sampleColors(it, mesh))
-        }
-        return mesh
-    }
-
-    private fun sampleColors(colorGrid: VdbGrid, mesh: SurfaceNets.Mesh): FloatArray {
-        val colors = FloatArray(mesh.vertexCount * 4)
-        val color = FloatArray(3)
-        val vertices = mesh.vertices
-        for (i in 0 until mesh.vertexCount) {
-            colorGrid.sample(vertices[i * 3].toDouble(), vertices[i * 3 + 1].toDouble(), vertices[i * 3 + 2].toDouble(), color)
-            for (c in 0 until 3) {
-                colors[i * 4 + c] = linearToSrgb(color[c])
-            }
-            colors[i * 4 + 3] = 1f
-        }
-        return colors
+        surface.colors?.let { colorBuffer = allocateFloats(it) }
     }
 
     private fun setMesh(mesh: SurfaceNets.Mesh) {
@@ -111,6 +84,35 @@ class VdbModel(inputStream: InputStream) : MeshModel() {
     companion object {
         // Fraction of the maximum density at which to draw the surface of a fog volume.
         const val FOG_ISO_FRACTION = 0.1f
+
+        /**
+         * Extracts the surface of the volume at full resolution (and its colors, if any).
+         */
+        fun extractSurface(grids: VdbReader.Grids): Surface {
+            val grid = grids.surface
+            val surfaceNets = if (grid.isLevelSet) {
+                SurfaceNets(grid, 0f, false)
+            } else {
+                SurfaceNets(grid, grid.maxValue * FOG_ISO_FRACTION, true)
+            }
+            val mesh = surfaceNets.extract()
+            val colors = grids.color?.let { sampleColors(it, mesh) }
+            return Surface(mesh, colors, grid.name, grids.color?.name)
+        }
+
+        private fun sampleColors(colorGrid: VdbGrid, mesh: SurfaceNets.Mesh): FloatArray {
+            val colors = FloatArray(mesh.vertexCount * 4)
+            val color = FloatArray(3)
+            val vertices = mesh.vertices
+            for (i in 0 until mesh.vertexCount) {
+                colorGrid.sample(vertices[i * 3].toDouble(), vertices[i * 3 + 1].toDouble(), vertices[i * 3 + 2].toDouble(), color)
+                for (c in 0 until 3) {
+                    colors[i * 4 + c] = linearToSrgb(color[c])
+                }
+                colors[i * 4 + 3] = 1f
+            }
+            return colors
+        }
 
         /**
          * Volume colors are in linear space (as used for rendering), so they're converted to sRGB for display.

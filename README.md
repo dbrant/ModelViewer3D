@@ -2,7 +2,9 @@
 
 3D model viewer app for Android! Supports STL files (ASCII and binary), and has limited support for OBJ (Wavefront) and PLY (Stanford) files.
 
-Also supports OpenVDB (.vdb) volumes: level sets are displayed as their surface, and fog volumes (such as smoke or clouds) are displayed as the surface where their density reaches 10% of its maximum. The first float or double grid in the file is shown.
+Also supports OpenVDB (.vdb) volumes: level sets are displayed as their surface, and fog volumes (such as smoke or clouds) are rendered as translucent volumes, by ray marching through their density on the GPU, with light from above that the volume shadows itself. The first float or double grid in the file is shown.
+
+Requires a device that supports OpenGL ES 3.0.
 
 Models are shown with their colors and materials, when the file has them:
 * OBJ: materials (colors, shininess, transparency) and diffuse textures, from the material (.mtl) files that the model refers to. Since Android only gives access to the files that you pick, select the .mtl and texture files together with the .obj file when opening it (long-press to select multiple files). Models opened from a web link find their files automatically. OBJ files with vertex colors are also supported.
