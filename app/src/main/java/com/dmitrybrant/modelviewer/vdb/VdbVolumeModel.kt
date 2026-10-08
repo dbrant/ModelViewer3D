@@ -188,6 +188,10 @@ class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, va
         GLES30.glUniform1f(GLES30.glGetUniformLocation(glProgram, "u_Albedo"), if (glow != VolumeTexture.Glow.NONE) SMOKE_ALBEDO else 1f)
         GLES30.glUniform1f(GLES30.glGetUniformLocation(glProgram, "u_ThermalGlow"),
             if (glow == VolumeTexture.Glow.THERMAL) GLOW_BRIGHTNESS else 0f)
+        // Hot things glow with the fourth power of their temperature (by the Stefan-Boltzmann law),
+        // and flames glow more evenly.
+        GLES30.glUniform1f(GLES30.glGetUniformLocation(glProgram, "u_GlowExponent"),
+            if (glow == VolumeTexture.Glow.THERMAL) 4f else 2f)
         // A ray through all of the flames, packed into a cube at full intensity, would glow at full
         // brightness, whatever the units of the volume.
         GLES30.glUniform1f(GLES30.glGetUniformLocation(glProgram, "u_FlameGlow"),

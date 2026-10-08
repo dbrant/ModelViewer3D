@@ -156,17 +156,16 @@ class VolumeTexture(
         private const val PLANCK_C2 = 1.4388e-2
 
         /**
-         * Emission colors of fire for temperatures from cold to the hottest (256 entries of three
-         * sRGB bytes): the color of a blackbody from [FIRE_MIN_KELVIN] to [FIRE_MAX_KELVIN], with
-         * a brightness that increases with the square of the temperature, from nothing to full.
+         * Colors of fire for temperatures from cold to the hottest (256 entries of three sRGB
+         * bytes): the color of a blackbody from [FIRE_MIN_KELVIN] to [FIRE_MAX_KELVIN], at full
+         * brightness. (How brightly each temperature glows is up to the renderer.)
          */
         val FIRE_RAMP: ByteArray by lazy {
             val ramp = ByteArray(256 * 3)
             for (i in 0 until 256) {
-                val t = i / 255.0
-                val color = blackbodyColor(FIRE_MIN_KELVIN + t * (FIRE_MAX_KELVIN - FIRE_MIN_KELVIN))
+                val color = blackbodyColor(FIRE_MIN_KELVIN + i / 255.0 * (FIRE_MAX_KELVIN - FIRE_MIN_KELVIN))
                 for (c in 0 until 3) {
-                    ramp[i * 3 + c] = toByte(VdbModel.linearToSrgb((color[c] * t * t).toFloat()) * 255f)
+                    ramp[i * 3 + c] = toByte(VdbModel.linearToSrgb(color[c]) * 255f)
                 }
             }
             ramp

@@ -11,8 +11,10 @@ uniform sampler3D u_Color;
 uniform bool u_HasColor;
 // Fraction of the light that the volume reflects, when it has no colors.
 uniform float u_Albedo;
-// Color of the light that fire emits, for each amount of glow.
+// Color of the light that fire emits, for each amount of glow, at full brightness.
 uniform sampler2D u_FireRamp;
+// Brightness of the glow increases with this power of the amount of glow.
+uniform float u_GlowExponent;
 // Brightness of the glow from temperature, relative to how much light the volume absorbs.
 uniform float u_ThermalGlow;
 // Brightness of the glow from flames, per world unit.
@@ -73,7 +75,8 @@ void main()
         if (voxel.b > 0.0) {
             // Hot parts of the volume glow as much as they absorb light (by Kirchhoff's law), and
             // flames glow on their own.
-            vec3 glow = textureLod(u_FireRamp, vec2(voxel.b * (255.0 / 256.0) + 0.5 / 256.0, 0.5), 0.0).rgb;
+            vec3 glow = textureLod(u_FireRamp, vec2(voxel.b * (255.0 / 256.0) + 0.5 / 256.0, 0.5), 0.0).rgb
+                    * pow(voxel.b, u_GlowExponent);
             emitted += transmittance * glow * (alpha * u_ThermalGlow + stepLength * u_FlameGlow);
         }
         transmittance *= 1.0 - alpha;

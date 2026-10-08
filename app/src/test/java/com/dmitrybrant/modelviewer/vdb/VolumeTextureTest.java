@@ -249,8 +249,10 @@ public class VolumeTextureTest {
         assertEquals("Cd", ((VdbVolumeModel) coloredFire).getColorGridName());
         assertEquals("temperature", ((VdbVolumeModel) coloredFire).getGlowGridName());
 
-        // Flames glow rather than the temperature, if there are both.
-        Model flames = load(fogSphere(), temperatureGrid("temperature"), flameGrid("flames"));
+        // The temperature glows rather than flames, if there are both.
+        Model fire = load(fogSphere(), temperatureGrid("temperature"), flameGrid("flames"));
+        assertEquals("temperature", ((VdbVolumeModel) fire).getGlowGridName());
+        Model flames = load(fogSphere(), flameGrid("flames"));
         assertEquals("flames", ((VdbVolumeModel) flames).getGlowGridName());
 
         Model levelSet = load(levelSetSphere());
@@ -283,16 +285,17 @@ public class VolumeTextureTest {
     public void testFireRamp() {
         byte[] ramp = VolumeTexture.Companion.getFIRE_RAMP();
         assertEquals(256 * 3, ramp.length);
-        // From nothing when cold, getting brighter, to the full color of the hottest blackbody.
-        for (int c = 0; c < 3; c++) {
-            assertEquals(0, ramp[c]);
-        }
-        float[] hottest = VolumeTexture.Companion.blackbodyColor(VolumeTexture.FIRE_MAX_KELVIN);
-        for (int c = 0; c < 3; c++) {
-            assertEquals(VdbModel.Companion.linearToSrgb(hottest[c]) * 255, ramp[255 * 3 + c] & 0xff, BYTE_TOLERANCE);
+        // The colors of blackbodies from the coolest to the hottest, at full brightness.
+        for (int i = 0; i < 256; i += 51) {
+            float[] color = VolumeTexture.Companion.blackbodyColor(VolumeTexture.FIRE_MIN_KELVIN
+                    + i / 255.0 * (VolumeTexture.FIRE_MAX_KELVIN - VolumeTexture.FIRE_MIN_KELVIN));
+            for (int c = 0; c < 3; c++) {
+                assertEquals("Entry " + i, VdbModel.Companion.linearToSrgb(color[c]) * 255, ramp[i * 3 + c] & 0xff, BYTE_TOLERANCE);
+            }
         }
         for (int i = 1; i < 256; i++) {
-            assertTrue("Entry " + i, (ramp[i * 3] & 0xff) >= (ramp[i * 3 - 3] & 0xff));
+            assertEquals("Entry " + i, 255, ramp[i * 3] & 0xff);
+            assertTrue("Entry " + i, (ramp[i * 3 + 1] & 0xff) >= (ramp[i * 3 - 2] & 0xff));
         }
     }
 
