@@ -213,10 +213,10 @@ class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, va
         GLES30.glEnable(GLES30.GL_BLEND)
         GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE_MINUS_SRC_ALPHA)
         GLES30.glDepthMask(false)
-        // The bottom of the box lies on the floor, so it's moved slightly toward the camera to keep
-        // the floor from hiding it.
-        GLES30.glEnable(GLES30.GL_POLYGON_OFFSET_FILL)
-        GLES30.glPolygonOffset(-1f, -2f)
+        // The floor never hides the volume: the floor is drawn only when it's seen from above (from
+        // below, its faces are culled), and the volume lies above it. So the volume isn't depth
+        // tested, which on some GPUs would hide parts of the bottom of its box, which lies on the floor.
+        GLES30.glDisable(GLES30.GL_DEPTH_TEST)
 
         val positionHandle = GLES30.glGetAttribLocation(glProgram, "a_Position")
         GLES30.glEnableVertexAttribArray(positionHandle)
@@ -224,7 +224,7 @@ class VdbVolumeModel(private val volume: VolumeTexture, val gridName: String, va
         GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, CUBE_VERTICES.size / 3)
         GLES30.glDisableVertexAttribArray(positionHandle)
 
-        GLES30.glDisable(GLES30.GL_POLYGON_OFFSET_FILL)
+        GLES30.glEnable(GLES30.GL_DEPTH_TEST)
         GLES30.glDepthMask(true)
         GLES30.glDisable(GLES30.GL_BLEND)
         GLES30.glCullFace(GLES30.GL_BACK)
