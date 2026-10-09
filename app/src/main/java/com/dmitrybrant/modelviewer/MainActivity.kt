@@ -205,6 +205,7 @@ class MainActivity : AppCompatActivity() {
     private fun beginLoadModel(uris: List<Uri>) {
         lifecycleScope.launch(CoroutineExceptionHandler { _, throwable ->
             throwable.printStackTrace()
+            binding.progressBar.isVisible = false
             Toast.makeText(applicationContext, getString(R.string.open_model_error, throwable.message), Toast.LENGTH_SHORT).show()
         }) {
             binding.progressBar.isVisible = true
