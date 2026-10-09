@@ -26,6 +26,7 @@ import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import com.dmitrybrant.modelviewer.databinding.ActivityMainBinding
 import com.dmitrybrant.modelviewer.cardboard.ModelCardboardActivity
+import com.dmitrybrant.modelviewer.fbx.FbxModel
 import com.dmitrybrant.modelviewer.obj.ObjModel
 import com.dmitrybrant.modelviewer.ply.PlyModel
 import com.dmitrybrant.modelviewer.stl.StlModel
@@ -255,6 +256,9 @@ class MainActivity : AppCompatActivity() {
                                 fileName.lowercase(Locale.ROOT).endsWith(".3mf") -> {
                                     ThreeMfModel(stream)
                                 }
+                                fileName.lowercase(Locale.ROOT).endsWith(".fbx") -> {
+                                    FbxModel(stream, resources)
+                                }
                                 else -> {
                                     // assume it's STL.
                                     StlModel(stream)
@@ -334,6 +338,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        private val MODEL_EXTENSIONS = listOf(".stl", ".obj", ".ply", ".vdb", ".3mf")
+        private val MODEL_EXTENSIONS = listOf(".stl", ".obj", ".ply", ".vdb", ".3mf", ".fbx")
     }
 }

@@ -54,7 +54,7 @@
                 <data android:mimeType="application/vnd.ms-3mfdocument" />
             </intent-filter>
 
-            <!-- Android doesn't know the MIME types of PLY, VDB, and 3MF files, so file managers
+            <!-- Android doesn't know the MIME types of PLY, VDB, 3MF, and FBX files, so file managers
                  usually open them as application/octet-stream. Instead, models are recognized by the
                  extensions of their names, whatever their MIME types, when their URIs contain their
                  names (as when they're opened from a folder in a file manager).
@@ -93,6 +93,12 @@
                 <data android:pathPattern=".*\\..*\\..*\\.3mf" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.3mf" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.3mf" />
+                <data android:pathSuffix=".fbx" />
+                <data android:pathPattern=".*\\.fbx" />
+                <data android:pathPattern=".*\\..*\\.fbx" />
+                <data android:pathPattern=".*\\..*\\..*\\.fbx" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.fbx" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.fbx" />
                 <data android:pathSuffix=".STL" />
                 <data android:pathPattern=".*\\.STL" />
                 <data android:pathPattern=".*\\..*\\.STL" />
@@ -117,6 +123,12 @@
                 <data android:pathPattern=".*\\..*\\..*\\.3MF" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.3MF" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.3MF" />
+                <data android:pathSuffix=".FBX" />
+                <data android:pathPattern=".*\\.FBX" />
+                <data android:pathPattern=".*\\..*\\.FBX" />
+                <data android:pathPattern=".*\\..*\\..*\\.FBX" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.FBX" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.FBX" />
             </intent-filter>
 
             <!-- The same, for files that are opened without a MIME type. -->
@@ -150,6 +162,12 @@
                 <data android:pathPattern=".*\\..*\\..*\\.3mf" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.3mf" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.3mf" />
+                <data android:pathSuffix=".fbx" />
+                <data android:pathPattern=".*\\.fbx" />
+                <data android:pathPattern=".*\\..*\\.fbx" />
+                <data android:pathPattern=".*\\..*\\..*\\.fbx" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.fbx" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.fbx" />
                 <data android:pathSuffix=".STL" />
                 <data android:pathPattern=".*\\.STL" />
                 <data android:pathPattern=".*\\..*\\.STL" />
@@ -174,6 +192,12 @@
                 <data android:pathPattern=".*\\..*\\..*\\.3MF" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.3MF" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.3MF" />
+                <data android:pathSuffix=".FBX" />
+                <data android:pathPattern=".*\\.FBX" />
+                <data android:pathPattern=".*\\..*\\.FBX" />
+                <data android:pathPattern=".*\\..*\\..*\\.FBX" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.FBX" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.FBX" />
             </intent-filter>
         </activity>
 

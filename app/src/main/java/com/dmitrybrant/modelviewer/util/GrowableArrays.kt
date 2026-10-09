@@ -63,3 +63,55 @@ class IntList(initialCapacity: Int = 1024) {
         size = 0
     }
 }
+
+/**
+ * A growable array of doubles, which avoids the overhead of boxing every value in a MutableList<Double>.
+ * The backing [array] may be larger than [size].
+ */
+class DoubleList(initialCapacity: Int = 1024) {
+    var array = DoubleArray(initialCapacity)
+        private set
+    var size = 0
+        private set
+
+    fun add(value: Double) {
+        if (size == array.size) {
+            array = array.copyOf(maxOf(size * 2, 16))
+        }
+        array[size++] = value
+    }
+
+    operator fun get(index: Int) = array[index]
+
+    fun clear() {
+        size = 0
+    }
+
+    fun toArray() = array.copyOf(size)
+}
+
+/**
+ * A growable array of longs, which avoids the overhead of boxing every value in a MutableList<Long>.
+ * The backing [array] may be larger than [size].
+ */
+class LongList(initialCapacity: Int = 1024) {
+    var array = LongArray(initialCapacity)
+        private set
+    var size = 0
+        private set
+
+    fun add(value: Long) {
+        if (size == array.size) {
+            array = array.copyOf(maxOf(size * 2, 16))
+        }
+        array[size++] = value
+    }
+
+    operator fun get(index: Int) = array[index]
+
+    fun clear() {
+        size = 0
+    }
+
+    fun toArray() = array.copyOf(size)
+}
