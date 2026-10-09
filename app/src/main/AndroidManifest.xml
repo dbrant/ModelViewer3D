@@ -37,8 +37,9 @@
                 <category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
             </intent-filter>
 
-            <!-- STL files have MIME types that Android and other apps know (under various names), so
-                 they're recognized wherever they're opened from, even when their names are unknown. -->
+            <!-- STL and 3MF files have MIME types that Android or other apps know (under various
+                 names), so they're recognized wherever they're opened from, even when their names
+                 are unknown. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -49,12 +50,14 @@
                 <data android:mimeType="application/stl" />
                 <data android:mimeType="application/sla" />
                 <data android:mimeType="model/stl" />
+                <data android:mimeType="model/3mf" />
+                <data android:mimeType="application/vnd.ms-3mfdocument" />
             </intent-filter>
 
-            <!-- Android doesn't know the MIME types of PLY and VDB files, so file managers usually open
-                 them as application/octet-stream. Instead, models are recognized by the extensions of
-                 their names, whatever their MIME types, when their URIs contain their names (as when
-                 they're opened from a folder in a file manager).
+            <!-- Android doesn't know the MIME types of PLY, VDB, and 3MF files, so file managers
+                 usually open them as application/octet-stream. Instead, models are recognized by the
+                 extensions of their names, whatever their MIME types, when their URIs contain their
+                 names (as when they're opened from a folder in a file manager).
                  A path pattern matches ".*" only up to the first occurrence of the character after it,
                  so there's a pattern for each number of dots before the extension. Newer versions of
                  Android also match the suffix of the path. Extensions may be in lowercase or uppercase. -->
@@ -84,6 +87,12 @@
                 <data android:pathPattern=".*\\..*\\..*\\.vdb" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.vdb" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.vdb" />
+                <data android:pathSuffix=".3mf" />
+                <data android:pathPattern=".*\\.3mf" />
+                <data android:pathPattern=".*\\..*\\.3mf" />
+                <data android:pathPattern=".*\\..*\\..*\\.3mf" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.3mf" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.3mf" />
                 <data android:pathSuffix=".STL" />
                 <data android:pathPattern=".*\\.STL" />
                 <data android:pathPattern=".*\\..*\\.STL" />
@@ -102,6 +111,12 @@
                 <data android:pathPattern=".*\\..*\\..*\\.VDB" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.VDB" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.VDB" />
+                <data android:pathSuffix=".3MF" />
+                <data android:pathPattern=".*\\.3MF" />
+                <data android:pathPattern=".*\\..*\\.3MF" />
+                <data android:pathPattern=".*\\..*\\..*\\.3MF" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.3MF" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.3MF" />
             </intent-filter>
 
             <!-- The same, for files that are opened without a MIME type. -->
@@ -129,6 +144,12 @@
                 <data android:pathPattern=".*\\..*\\..*\\.vdb" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.vdb" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.vdb" />
+                <data android:pathSuffix=".3mf" />
+                <data android:pathPattern=".*\\.3mf" />
+                <data android:pathPattern=".*\\..*\\.3mf" />
+                <data android:pathPattern=".*\\..*\\..*\\.3mf" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.3mf" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.3mf" />
                 <data android:pathSuffix=".STL" />
                 <data android:pathPattern=".*\\.STL" />
                 <data android:pathPattern=".*\\..*\\.STL" />
@@ -147,6 +168,12 @@
                 <data android:pathPattern=".*\\..*\\..*\\.VDB" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.VDB" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.VDB" />
+                <data android:pathSuffix=".3MF" />
+                <data android:pathPattern=".*\\.3MF" />
+                <data android:pathPattern=".*\\..*\\.3MF" />
+                <data android:pathPattern=".*\\..*\\..*\\.3MF" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.3MF" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.3MF" />
             </intent-filter>
         </activity>
 
