@@ -1,0 +1,75 @@
+// Builds the Google Cardboard SDK (https://github.com/googlevr/cardboard), including its Java API
+// (CardboardView), from the sources in the third_party/cardboard submodule. The SDK isn't published
+// as a binary, so it's built here the same way that its own build.gradle and samples build it.
+
+apply plugin: 'com.android.library'
+apply plugin: 'com.google.protobuf'
+
+def sdkDir = rootProject.file('third_party/cardboard')
+
+android {
+    compileSdk = 37
+    defaultConfig {
+        minSdk = 23
+        consumerProguardFiles "$sdkDir/sdk/proguard-rules.pro", "$sdkDir/java_api/proguard-rules.pro"
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
+            }
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path = file('CMakeLists.txt')
+        }
+    }
+    sourceSets {
+        main {
+            manifest.srcFile "$sdkDir/sdk/qrcode/android/AndroidManifest.xml"
+            java.srcDirs = [
+                    "$sdkDir/sdk/qrcode/android/java",
+                    "$sdkDir/sdk/device_params/android/java",
+                    "$sdkDir/sdk/screen_params/android/java",
+                    "$sdkDir/sdk/java_utils/android/java",
+                    "$sdkDir/java_api/src/main/java"
+            ]
+            res.srcDirs = [
+                    "$sdkDir/sdk/qrcode/android/res",
+                    "$sdkDir/java_api/src/main/res"
+            ]
+            proto.srcDirs = ["$sdkDir/proto"]
+        }
+    }
+    compileOptions {
+        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_17
+    }
+    lint {
+        abortOnError false
+    }
+    namespace 'com.google.cardboard.sdk'
+}
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:4.36.2'
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                java {
+                    option 'lite'
+                }
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.8.0'
+    implementation 'com.google.android.material:material:1.14.0'
+    // Used by the SDK for scanning the QR codes of Cardboard viewers.
+    implementation 'com.google.android.gms:play-services-vision:20.1.3'
+    implementation 'com.google.protobuf:protobuf-javalite:4.36.2'
+    implementation 'org.jspecify:jspecify:1.0.1'
+}

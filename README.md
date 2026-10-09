@@ -14,6 +14,16 @@ Models are shown with their colors and materials, when the file has them:
 
 Sample models from the Stanford [3D Scanning Repository](https://graphics.stanford.edu/data/3Dscanrep/), decimated using Blender.
 
+## Building
+
+VR mode uses the [Google Cardboard SDK](https://github.com/googlevr/cardboard), which is built from source from the `third_party/cardboard` submodule. Clone the repository with its submodules:
+
+```
+git clone --recurse-submodules https://github.com/dbrant/ModelViewer3D.git
+```
+
+or, in an existing clone, run `git submodule update --init`. Building the SDK requires the Android NDK and CMake, which Android Studio installs from the SDK Manager.
+
 ## License
 
 Copyright 2017+ Dmitry Brant

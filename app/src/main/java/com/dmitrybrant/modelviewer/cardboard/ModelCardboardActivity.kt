@@ -1,15 +1,24 @@
-package com.dmitrybrant.modelviewer.gvr
+package com.dmitrybrant.modelviewer.cardboard
 
 import android.opengl.GLES20
+import android.opengl.GLSurfaceView
 import android.opengl.Matrix
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.WindowManager
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.children
 import com.dmitrybrant.modelviewer.Light
 import com.dmitrybrant.modelviewer.ModelViewerApplication
-import com.dmitrybrant.modelviewer.databinding.ActivityGvrBinding
+import com.dmitrybrant.modelviewer.databinding.ActivityCardboardBinding
 import com.dmitrybrant.modelviewer.util.Util.checkGLError
-import com.google.vr.sdk.base.*
-import com.google.vr.sdk.base.GvrView.StereoRenderer
+import com.google.cardboard.sdk.CardboardView
+import com.google.cardboard.sdk.HeadTransform
+import com.google.cardboard.sdk.Viewport
 import javax.microedition.khronos.egl.EGLConfig
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -29,8 +38,8 @@ import kotlin.math.atan2
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-class ModelGvrActivity : GvrActivity(), StereoRenderer {
-    private lateinit var binding: ActivityGvrBinding
+class ModelCardboardActivity : AppCompatActivity(), CardboardView.Renderer {
+    private lateinit var binding: ActivityCardboardBinding
 
     private var rotateAngleX = 0f
     private var rotateAngleY = 0f
@@ -50,31 +59,49 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
 
     public override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        initializeGvrView()
+        initializeCardboardView()
     }
 
-    private fun initializeGvrView()
+    override fun onResume() {
+        super.onResume()
+        binding.cardboardView.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        binding.cardboardView.onPause()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        binding.cardboardView.onDestroy()
+    }
+
+    private fun initializeCardboardView()
     {
-        binding = ActivityGvrBinding.inflate(layoutInflater)
+        binding = ActivityCardboardBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // The context version needs to be set first, since the config chooser picks configs that support it.
-        binding.gvrView.setEGLContextClientVersion(3)
-        binding.gvrView.setEGLConfigChooser(8, 8, 8, 8, 16, 8)
-        binding.gvrView.setRenderer(this)
-        binding.gvrView.setTransitionViewEnabled(true)
-
-        // Enable Cardboard-trigger feedback with Daydream headsets. This is a simple way of supporting
-        // Daydream controller input for basic interactions using the existing Cardboard trigger API.
-        binding.gvrView.enableCardboardTriggerEmulation()
-        binding.gvrView.setOnCloseButtonListener { finish() }
-        if (binding.gvrView.setAsyncReprojectionEnabled(true)) {
-            // Async reprojection decouples the app framerate from the display framerate,
-            // allowing immersive interaction even at the throttled clockrates set by
-            // sustained performance mode.
-            AndroidCompat.setSustainedPerformanceMode(this, true)
+        // Use the whole screen, without the system bars, and keep it on.
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
-        gvrView = binding.gvrView
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+
+        // CardboardView sets up its GLSurfaceView for OpenGL ES 2.0, but the models need 3.0.
+        // The context version needs to be set first, since the config chooser picks configs that support it.
+        binding.cardboardView.children.filterIsInstance<GLSurfaceView>().first().setEGLContextClientVersion(3)
+        binding.cardboardView.setEGLConfigChooser(8, 8, 8, 8, 16, 8)
+        binding.cardboardView.setRenderer(this)
+        binding.cardboardView.setStereoRenderMode(true)
+
+        binding.cardboardView.setOnBackButtonClick { finish() }
+        binding.cardboardView.setOnSettingsButtonClick { binding.cardboardView.scanViewerQrCode() }
+        binding.cardboardView.setOnTriggerEvent { onCardboardTrigger() }
     }
 
     override fun onRendererShutdown() {
@@ -98,9 +125,6 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
 
     override fun onSurfaceCreated(config: EGLConfig) {
         Log.i(TAG, "onSurfaceCreated")
-        GLES20.glClearColor(0.2f, 0.2f, 0.2f, 1f)
-        GLES20.glEnable(GLES20.GL_CULL_FACE)
-        GLES20.glEnable(GLES20.GL_DEPTH_TEST)
         ModelViewerApplication.currentModel?.setup(MODEL_BOUND_SIZE)
         checkGLError("onSurfaceCreated")
     }
@@ -123,17 +147,21 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
         headEulerAngles[2] *= RAD2DEG
 
         updateViewMatrix()
+
+        // CardboardView clears the frame (for both eyes) after this, and its distortion pass at the
+        // end of the previous frame changes some of the GL state, so the state is set for each frame.
+        GLES20.glClearColor(0.2f, 0.2f, 0.2f, 1f)
+        GLES20.glEnable(GLES20.GL_CULL_FACE)
+        GLES20.glEnable(GLES20.GL_DEPTH_TEST)
         checkGLError("onNewFrame")
     }
 
-    override fun onDrawEye(eye: Eye) {
-        GLES20.glEnable(GLES20.GL_DEPTH_TEST)
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
-
+    override fun onDrawEye(eye: CardboardView.Eye) {
         // Keep the model in front of the camera by applying the inverse of the head matrix
         Matrix.multiplyMM(finalViewMatrix, 0, inverseHeadView, 0, viewMatrix, 0)
 
         // Apply the eye transformation to the final view
+        eye.applyHeadView(headView)
         Matrix.multiplyMM(finalViewMatrix, 0, eye.eyeView, 0, finalViewMatrix, 0)
 
         // Rotate based on Euler angles, so the user can look around the model.
@@ -148,7 +176,7 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
 
     override fun onFinishFrame(viewport: Viewport) { }
 
-    override fun onCardboardTrigger() {
+    private fun onCardboardTrigger() {
         Log.i(TAG, "onCardboardTrigger")
         // TODO: use for something
     }
@@ -168,7 +196,7 @@ class ModelGvrActivity : GvrActivity(), StereoRenderer {
         }
 
     companion object {
-        private const val TAG = "ModelGvrActivity"
+        private const val TAG = "ModelCardboardActivity"
         private const val MODEL_BOUND_SIZE = 5f
         private const val Z_NEAR = 0.1f
         private const val Z_FAR = MODEL_BOUND_SIZE * 4

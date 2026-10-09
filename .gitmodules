@@ -1,0 +1,3 @@
+[submodule "third_party/cardboard"]
+	path = third_party/cardboard
+	url = https://github.com/googlevr/cardboard.git

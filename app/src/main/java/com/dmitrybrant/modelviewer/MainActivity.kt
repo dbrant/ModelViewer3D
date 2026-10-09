@@ -25,7 +25,7 @@ import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import com.dmitrybrant.modelviewer.databinding.ActivityMainBinding
-import com.dmitrybrant.modelviewer.gvr.ModelGvrActivity
+import com.dmitrybrant.modelviewer.cardboard.ModelCardboardActivity
 import com.dmitrybrant.modelviewer.obj.ObjModel
 import com.dmitrybrant.modelviewer.ply.PlyModel
 import com.dmitrybrant.modelviewer.stl.StlModel
@@ -307,7 +307,7 @@ class MainActivity : AppCompatActivity() {
         if (ModelViewerApplication.currentModel == null) {
             Toast.makeText(this, R.string.view_vr_not_loaded, Toast.LENGTH_SHORT).show()
         } else {
-            startActivity(Intent(this, ModelGvrActivity::class.java))
+            startActivity(Intent(this, ModelCardboardActivity::class.java))
         }
     }
 
