@@ -249,7 +249,11 @@ open class MeshModel : Model() {
         GLES20.glDisableVertexAttribArray(positionHandle)
     }
 
-    private fun isTransparent(material: Material) = material.opacity < 1f || transparentTextures.contains(material)
+    private fun isTransparent(material: Material) = when (material.alphaMode) {
+        Material.AlphaMode.AUTO -> material.opacity < 1f || transparentTextures.contains(material)
+        Material.AlphaMode.BLEND -> true
+        Material.AlphaMode.OPAQUE, Material.AlphaMode.MASK -> false
+    }
 
     private fun drawPart(part: MeshPart) {
         val material = part.material
@@ -261,6 +265,10 @@ open class MeshModel : Model() {
         GLES20.glUniform1f(GLES20.glGetUniformLocation(glProgram, "u_Lighting"), material.lighting.toFloat())
         GLES20.glUniform2fv(GLES20.glGetUniformLocation(glProgram, "u_TexScale"), 1, material.textureScale, 0)
         GLES20.glUniform2fv(GLES20.glGetUniformLocation(glProgram, "u_TexOffset"), 1, material.textureOffset, 0)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(glProgram, "u_AlphaCutoff"),
+            if (material.alphaMode == Material.AlphaMode.MASK) material.alphaCutoff else 0f)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(glProgram, "u_Opaque"),
+            if (material.alphaMode == Material.AlphaMode.OPAQUE || material.alphaMode == Material.AlphaMode.MASK) 1f else 0f)
         val textureId = textureIds[material]
         GLES20.glUniform1f(GLES20.glGetUniformLocation(glProgram, "u_UseTexture"), if (textureId != null) 1f else 0f)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)

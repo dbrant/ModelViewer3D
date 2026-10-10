@@ -3,11 +3,21 @@ package com.dmitrybrant.modelviewer.fbx
 import com.dmitrybrant.modelviewer.Material
 import com.dmitrybrant.modelviewer.ModelResources
 import com.dmitrybrant.modelviewer.util.FloatList
+import com.dmitrybrant.modelviewer.util.Transforms.determinant
+import com.dmitrybrant.modelviewer.util.Transforms.faceNormal
+import com.dmitrybrant.modelviewer.util.Transforms.identity
+import com.dmitrybrant.modelviewer.util.Transforms.inverse
+import com.dmitrybrant.modelviewer.util.Transforms.multiply
+import com.dmitrybrant.modelviewer.util.Transforms.normalMatrix
+import com.dmitrybrant.modelviewer.util.Transforms.rotation
+import com.dmitrybrant.modelviewer.util.Transforms.scaling
+import com.dmitrybrant.modelviewer.util.Transforms.transformNormal
+import com.dmitrybrant.modelviewer.util.Transforms.transformPoint
+import com.dmitrybrant.modelviewer.util.Transforms.translation
+import com.dmitrybrant.modelviewer.util.Transforms.transpose
+import com.dmitrybrant.modelviewer.util.Util
 import java.io.IOException
 import java.util.Locale
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 /*
 * Interprets an FBX file: finds the meshes of its models, places them with the transforms of the
@@ -405,7 +415,7 @@ class FbxScene(private val document: FbxParser.Document, private val resources: 
         content.properties.firstOrNull { it is ByteArray && it.isNotEmpty() }?.let { return it as ByteArray }
         // In ASCII files, the content is encoded in Base64, possibly in several strings.
         val encoded = content.properties.filterIsInstance<String>().joinToString("")
-        return if (encoded.isNotEmpty()) decodeBase64(encoded) else null
+        return if (encoded.isNotEmpty()) Util.decodeBase64(encoded) else null
     }
 
     private fun openFile(node: FbxNode): ByteArray? {
@@ -469,166 +479,5 @@ class FbxScene(private val document: FbxParser.Document, private val resources: 
     companion object {
         private const val MAX_DEPTH = 256
         private val DIFFUSE_PROPERTY_NAMES = listOf("diffuse", "basecolor", "base_color", "albedo")
-        private val ROTATION_ORDERS = listOf("XYZ", "XZY", "YZX", "YXZ", "ZXY", "ZYX")
-
-        // Column-major 4x4 matrices, applied to column vectors.
-
-        fun identity() = DoubleArray(16).also { it[0] = 1.0; it[5] = 1.0; it[10] = 1.0; it[15] = 1.0 }
-
-        fun translation(t: DoubleArray) = identity().also { it[12] = t[0]; it[13] = t[1]; it[14] = t[2] }
-
-        fun scaling(s: DoubleArray) = identity().also { it[0] = s[0]; it[5] = s[1]; it[10] = s[2] }
-
-        /** Rotation by Euler angles (in degrees) about the X, Y, and Z axes, applied in the given order (as in FbxEuler::EOrder). */
-        fun rotation(angles: DoubleArray, order: Int): DoubleArray {
-            var result = identity()
-            for (axis in ROTATION_ORDERS.getOrElse(order) { ROTATION_ORDERS[0] }) {
-                val a = Math.toRadians(angles[axis - 'X'])
-                val c = cos(a)
-                val s = sin(a)
-                val r = identity()
-                when (axis) {
-                    'X' -> { r[5] = c; r[6] = s; r[9] = -s; r[10] = c }
-                    'Y' -> { r[0] = c; r[2] = -s; r[8] = s; r[10] = c }
-                    else -> { r[0] = c; r[1] = s; r[4] = -s; r[5] = c }
-                }
-                result = multiply(r, result)
-            }
-            return result
-        }
-
-        fun multiply(a: DoubleArray, b: DoubleArray): DoubleArray {
-            val result = DoubleArray(16)
-            for (col in 0 until 4) {
-                for (row in 0 until 4) {
-                    var sum = 0.0
-                    for (k in 0 until 4) {
-                        sum += a[k * 4 + row] * b[col * 4 + k]
-                    }
-                    result[col * 4 + row] = sum
-                }
-            }
-            return result
-        }
-
-        private fun transpose(m: DoubleArray) = DoubleArray(16) { m[(it % 4) * 4 + it / 4] }
-
-        /** The determinant of the upper 3x3 part of the transform that starts at the given offset. */
-        private fun determinant(m: DoubleArray, o: Int = 0): Double {
-            return m[o] * (m[o + 5] * m[o + 10] - m[o + 9] * m[o + 6]) - m[o + 4] * (m[o + 1] * m[o + 10] - m[o + 9] * m[o + 2]) +
-                    m[o + 8] * (m[o + 1] * m[o + 6] - m[o + 5] * m[o + 2])
-        }
-
-        /** The cofactor matrix of the upper 3x3 part of the transform (column-major, as is the result). */
-        private fun cofactors(m: DoubleArray, o: Int, out: DoubleArray, offset: Int) {
-            out[offset] = m[o + 5] * m[o + 10] - m[o + 6] * m[o + 9]
-            out[offset + 1] = m[o + 6] * m[o + 8] - m[o + 4] * m[o + 10]
-            out[offset + 2] = m[o + 4] * m[o + 9] - m[o + 5] * m[o + 8]
-            out[offset + 3] = m[o + 2] * m[o + 9] - m[o + 1] * m[o + 10]
-            out[offset + 4] = m[o] * m[o + 10] - m[o + 2] * m[o + 8]
-            out[offset + 5] = m[o + 1] * m[o + 8] - m[o] * m[o + 9]
-            out[offset + 6] = m[o + 1] * m[o + 6] - m[o + 2] * m[o + 5]
-            out[offset + 7] = m[o + 2] * m[o + 4] - m[o] * m[o + 6]
-            out[offset + 8] = m[o] * m[o + 5] - m[o + 1] * m[o + 4]
-        }
-
-        /**
-         * The inverse transpose of the upper 3x3 part of the transform, which transforms normals
-         * (up to their length, since they're normalized anyway).
-         */
-        private fun normalMatrix(m: DoubleArray, o: Int, out: DoubleArray, offset: Int) {
-            // The cofactor matrix is the inverse transpose, multiplied by the determinant.
-            cofactors(m, o, out, offset)
-            if (determinant(m, o) < 0) {
-                for (i in offset until offset + 9) {
-                    out[i] = -out[i]
-                }
-            }
-        }
-
-        /** The inverse of an affine transform, or null if it has none. */
-        fun inverse(m: DoubleArray): DoubleArray? {
-            val det = determinant(m)
-            if (det == 0.0 || !det.isFinite()) {
-                return null
-            }
-            // The inverse of the 3x3 part is the transpose of its cofactor matrix, divided by the determinant.
-            val c = DoubleArray(9)
-            cofactors(m, 0, c, 0)
-            val result = identity()
-            for (col in 0 until 3) {
-                for (row in 0 until 3) {
-                    result[col * 4 + row] = c[row * 3 + col] / det
-                }
-            }
-            for (row in 0 until 3) {
-                result[12 + row] = -(result[row] * m[12] + result[4 + row] * m[13] + result[8 + row] * m[14])
-            }
-            return result
-        }
-
-        private fun transformPoint(m: DoubleArray, o: Int, x: Double, y: Double, z: Double, out: DoubleArray, offset: Int) {
-            out[offset] = m[o] * x + m[o + 4] * y + m[o + 8] * z + m[o + 12]
-            out[offset + 1] = m[o + 1] * x + m[o + 5] * y + m[o + 9] * z + m[o + 13]
-            out[offset + 2] = m[o + 2] * x + m[o + 6] * y + m[o + 10] * z + m[o + 14]
-        }
-
-        private fun transformNormal(m: DoubleArray, o: Int, normals: DoubleArray, index: Int, out: DoubleArray, offset: Int) {
-            val x = normals[index]
-            val y = normals[index + 1]
-            val z = normals[index + 2]
-            val nx = m[o] * x + m[o + 3] * y + m[o + 6] * z
-            val ny = m[o + 1] * x + m[o + 4] * y + m[o + 7] * z
-            val nz = m[o + 2] * x + m[o + 5] * y + m[o + 8] * z
-            val length = sqrt(nx * nx + ny * ny + nz * nz)
-            val scale = if (length > 0) 1 / length else 0.0
-            out[offset] = nx * scale
-            out[offset + 1] = ny * scale
-            out[offset + 2] = nz * scale
-        }
-
-        /** Sets the normal of every corner of a triangle to that of its face. */
-        private fun faceNormal(p: DoubleArray, out: DoubleArray) {
-            val e1x = p[3] - p[0]
-            val e1y = p[4] - p[1]
-            val e1z = p[5] - p[2]
-            val e2x = p[6] - p[0]
-            val e2y = p[7] - p[1]
-            val e2z = p[8] - p[2]
-            val nx = e1y * e2z - e1z * e2y
-            val ny = e1z * e2x - e1x * e2z
-            val nz = e1x * e2y - e1y * e2x
-            val length = sqrt(nx * nx + ny * ny + nz * nz)
-            val scale = if (length > 0) 1 / length else 0.0
-            for (c in 0 until 3) {
-                out[c * 3] = nx * scale
-                out[c * 3 + 1] = ny * scale
-                out[c * 3 + 2] = nz * scale
-            }
-        }
-
-        private const val BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-
-        /** Decodes Base64 (which java.util.Base64 can't do on older versions of Android). */
-        fun decodeBase64(text: String): ByteArray? {
-            val output = java.io.ByteArrayOutputStream(text.length * 3 / 4)
-            var buffer = 0
-            var bits = 0
-            for (ch in text) {
-                if (ch == '=') break
-                val value = BASE64_ALPHABET.indexOf(ch)
-                if (value < 0) {
-                    if (ch.isWhitespace()) continue
-                    return null
-                }
-                buffer = (buffer shl 6) or value
-                bits += 6
-                if (bits >= 8) {
-                    bits -= 8
-                    output.write((buffer shr bits) and 0xff)
-                }
-            }
-            return output.toByteArray()
-        }
     }
 }

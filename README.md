@@ -1,6 +1,6 @@
 # ModelViewer3D
 
-3D model viewer app for Android! Supports STL files (ASCII and binary), 3MF files, and FBX files (binary and ASCII), and has limited support for OBJ (Wavefront) and PLY (Stanford) files.
+3D model viewer app for Android! Supports STL files (ASCII and binary), 3MF files, FBX files (binary and ASCII), and glTF files (.glb and .gltf), and has limited support for OBJ (Wavefront) and PLY (Stanford) files.
 
 Also supports OpenVDB (.vdb) volumes: level sets are displayed as their surface, and fog volumes (such as smoke or clouds) are rendered as translucent volumes, by ray marching through their density on the GPU, with light from above that the volume shadows itself. The first float or double grid in the file is shown. If the volume also has a temperature grid (named "temperature") or a grid of flames (named "flames" or "flame", as from EmberGen or Blender), its hot parts glow like fire, with the colors of a blackbody.
 
@@ -13,6 +13,7 @@ Models are shown with their colors and materials, when the file has them:
 * VDB: a color grid (named "Cd" or "color") alongside the volume.
 * 3MF: colors of materials, triangles, and vertices, and textures. All objects in the build are shown, including components that are in other model parts of the file.
 * FBX: materials and diffuse textures, which may be embedded in the file, or in separate files (which are selected along with the .fbx file, as for OBJ). All meshes in the scene are shown, and skinned meshes are posed by their skeletons, in the pose that's stored in the file (animations aren't played).
+* glTF: materials (base colors, with highlights that approximate their roughness or glossiness, and alpha masks and blending), base color textures, and vertex colors. Skinned meshes are shown in their default pose, and morph targets with their default weights. The buffers and images of .gltf files may be embedded, or in separate files (which are selected along with the .gltf file, as for OBJ). Meshes compressed with Draco or meshopt aren't supported.
 
 Sample models from the Stanford [3D Scanning Repository](https://graphics.stanford.edu/data/3Dscanrep/), decimated using Blender.
 

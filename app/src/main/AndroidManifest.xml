@@ -37,9 +37,9 @@
                 <category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
             </intent-filter>
 
-            <!-- STL and 3MF files have MIME types that Android or other apps know (under various
-                 names), so they're recognized wherever they're opened from, even when their names
-                 are unknown. -->
+            <!-- STL, 3MF, and glTF files have MIME types that Android or other apps know (under
+                 various names), so they're recognized wherever they're opened from, even when their
+                 names are unknown. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -52,12 +52,15 @@
                 <data android:mimeType="model/stl" />
                 <data android:mimeType="model/3mf" />
                 <data android:mimeType="application/vnd.ms-3mfdocument" />
+                <data android:mimeType="model/gltf-binary" />
+                <data android:mimeType="model/gltf+json" />
             </intent-filter>
 
-            <!-- Android doesn't know the MIME types of PLY, VDB, 3MF, and FBX files, so file managers
-                 usually open them as application/octet-stream. Instead, models are recognized by the
-                 extensions of their names, whatever their MIME types, when their URIs contain their
-                 names (as when they're opened from a folder in a file manager).
+            <!-- Android doesn't know the MIME types of PLY, VDB, 3MF, and FBX files (nor, in some
+                 versions, of glTF files), so file managers usually open them as
+                 application/octet-stream. Instead, models are recognized by the extensions of their
+                 names, whatever their MIME types, when their URIs contain their names (as when
+                 they're opened from a folder in a file manager).
                  A path pattern matches ".*" only up to the first occurrence of the character after it,
                  so there's a pattern for each number of dots before the extension. Newer versions of
                  Android also match the suffix of the path. Extensions may be in lowercase or uppercase. -->
@@ -99,6 +102,18 @@
                 <data android:pathPattern=".*\\..*\\..*\\.fbx" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.fbx" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.fbx" />
+                <data android:pathSuffix=".glb" />
+                <data android:pathPattern=".*\\.glb" />
+                <data android:pathPattern=".*\\..*\\.glb" />
+                <data android:pathPattern=".*\\..*\\..*\\.glb" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.glb" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.glb" />
+                <data android:pathSuffix=".gltf" />
+                <data android:pathPattern=".*\\.gltf" />
+                <data android:pathPattern=".*\\..*\\.gltf" />
+                <data android:pathPattern=".*\\..*\\..*\\.gltf" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.gltf" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.gltf" />
                 <data android:pathSuffix=".STL" />
                 <data android:pathPattern=".*\\.STL" />
                 <data android:pathPattern=".*\\..*\\.STL" />
@@ -129,6 +144,18 @@
                 <data android:pathPattern=".*\\..*\\..*\\.FBX" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.FBX" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.FBX" />
+                <data android:pathSuffix=".GLB" />
+                <data android:pathPattern=".*\\.GLB" />
+                <data android:pathPattern=".*\\..*\\.GLB" />
+                <data android:pathPattern=".*\\..*\\..*\\.GLB" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.GLB" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.GLB" />
+                <data android:pathSuffix=".GLTF" />
+                <data android:pathPattern=".*\\.GLTF" />
+                <data android:pathPattern=".*\\..*\\.GLTF" />
+                <data android:pathPattern=".*\\..*\\..*\\.GLTF" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.GLTF" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.GLTF" />
             </intent-filter>
 
             <!-- The same, for files that are opened without a MIME type. -->
@@ -168,6 +195,18 @@
                 <data android:pathPattern=".*\\..*\\..*\\.fbx" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.fbx" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.fbx" />
+                <data android:pathSuffix=".glb" />
+                <data android:pathPattern=".*\\.glb" />
+                <data android:pathPattern=".*\\..*\\.glb" />
+                <data android:pathPattern=".*\\..*\\..*\\.glb" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.glb" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.glb" />
+                <data android:pathSuffix=".gltf" />
+                <data android:pathPattern=".*\\.gltf" />
+                <data android:pathPattern=".*\\..*\\.gltf" />
+                <data android:pathPattern=".*\\..*\\..*\\.gltf" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.gltf" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.gltf" />
                 <data android:pathSuffix=".STL" />
                 <data android:pathPattern=".*\\.STL" />
                 <data android:pathPattern=".*\\..*\\.STL" />
@@ -198,6 +237,18 @@
                 <data android:pathPattern=".*\\..*\\..*\\.FBX" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.FBX" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.FBX" />
+                <data android:pathSuffix=".GLB" />
+                <data android:pathPattern=".*\\.GLB" />
+                <data android:pathPattern=".*\\..*\\.GLB" />
+                <data android:pathPattern=".*\\..*\\..*\\.GLB" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.GLB" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.GLB" />
+                <data android:pathSuffix=".GLTF" />
+                <data android:pathPattern=".*\\.GLTF" />
+                <data android:pathPattern=".*\\..*\\.GLTF" />
+                <data android:pathPattern=".*\\..*\\..*\\.GLTF" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.GLTF" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.GLTF" />
             </intent-filter>
         </activity>
 

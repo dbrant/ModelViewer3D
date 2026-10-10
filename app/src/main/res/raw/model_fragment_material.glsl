@@ -7,6 +7,8 @@ uniform vec3 u_EmissiveColor;
 uniform float u_Shininess;
 uniform float u_Lighting;
 uniform float u_UseTexture;
+uniform float u_AlphaCutoff;
+uniform float u_Opaque;
 uniform sampler2D u_Texture;
 varying vec3 v_Normal;
 varying vec3 v_Position;
@@ -24,6 +26,10 @@ void main()
     if (u_UseTexture > 0.5) {
         base *= texture2D(u_Texture, v_TexCoord);
     }
+    // Materials with an alpha mask are only shown where their alpha reaches the cutoff.
+    if (base.a < u_AlphaCutoff) {
+        discard;
+    }
     vec3 color = base.rgb;
     // Lighting: 0 = none (constant color), 1 = diffuse only, 2 = diffuse and specular
     if (u_Lighting > 0.5) {
@@ -36,5 +42,5 @@ void main()
             color += u_SpecularColor * pow(max(dot(halfDir, normal), 0.0), u_Shininess);
         }
     }
-    gl_FragColor = vec4(color + u_EmissiveColor, base.a);
+    gl_FragColor = vec4(color + u_EmissiveColor, mix(base.a, 1.0, u_Opaque));
 }

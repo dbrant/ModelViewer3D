@@ -38,6 +38,23 @@ class Material(val name: String = "") {
     var textureScale = floatArrayOf(1f, 1f)
     var textureOffset = floatArrayOf(0f, 0f)
 
+    /** How the alpha of the diffuse color (the opacity, times the alpha of the texture) is used. */
+    var alphaMode = AlphaMode.AUTO
+
+    /** With [AlphaMode.MASK], the alpha at or above which the material is shown. */
+    var alphaCutoff = 0.5f
+
+    enum class AlphaMode {
+        /** The material is blended if it's partly transparent (in its opacity or its texture). */
+        AUTO,
+        /** The material is opaque, whatever its alpha. */
+        OPAQUE,
+        /** The material is shown (opaquely) only where its alpha is at least the [alphaCutoff]. */
+        MASK,
+        /** The material is blended. */
+        BLEND
+    }
+
     companion object {
         const val LIGHTING_NONE = 0
         const val LIGHTING_DIFFUSE = 1

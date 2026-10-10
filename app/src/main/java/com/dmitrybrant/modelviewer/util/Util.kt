@@ -141,4 +141,28 @@ object Util {
         }
         throw RuntimeException("Failed to read raw resource id $resourceId")
     }
+
+    private const val BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+    /** Decodes Base64 (which java.util.Base64 can't do on older versions of Android). */
+    fun decodeBase64(text: String): ByteArray? {
+        val output = java.io.ByteArrayOutputStream(text.length * 3 / 4)
+        var buffer = 0
+        var bits = 0
+        for (ch in text) {
+            if (ch == '=') break
+            val value = BASE64_ALPHABET.indexOf(ch)
+            if (value < 0) {
+                if (ch.isWhitespace()) continue
+                return null
+            }
+            buffer = (buffer shl 6) or value
+            bits += 6
+            if (bits >= 8) {
+                bits -= 8
+                output.write((buffer shr bits) and 0xff)
+            }
+        }
+        return output.toByteArray()
+    }
 }
