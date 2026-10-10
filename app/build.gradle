@@ -8,7 +8,7 @@ android {
         applicationId "com.dmitrybrant.modelviewer"
         minSdk = 23
         targetSdk = 37
-        versionCode = 28
+        versionCode = 29
         multiDexEnabled = true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
