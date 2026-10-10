@@ -12,6 +12,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.children
+import com.dmitrybrant.modelviewer.EglConfigChooser
 import com.dmitrybrant.modelviewer.Light
 import com.dmitrybrant.modelviewer.ModelViewerApplication
 import com.dmitrybrant.modelviewer.databinding.ActivityCardboardBinding
@@ -92,10 +93,11 @@ class ModelCardboardActivity : AppCompatActivity(), CardboardView.Renderer {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
 
-        // CardboardView sets up its GLSurfaceView for OpenGL ES 2.0, but the models need 3.0.
-        // The context version needs to be set first, since the config chooser picks configs that support it.
-        binding.cardboardView.children.filterIsInstance<GLSurfaceView>().first().setEGLContextClientVersion(3)
-        binding.cardboardView.setEGLConfigChooser(8, 8, 8, 8, 16, 8)
+        // CardboardView sets up its GLSurfaceView for OpenGL ES 2.0, but the models need 3.0, and a
+        // 24-bit depth buffer if possible.
+        val glView = binding.cardboardView.children.filterIsInstance<GLSurfaceView>().first()
+        glView.setEGLContextClientVersion(3)
+        glView.setEGLConfigChooser(EglConfigChooser(alphaSize = 8, stencilSize = 8))
         binding.cardboardView.setRenderer(this)
         binding.cardboardView.setStereoRenderMode(true)
 

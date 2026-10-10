@@ -1,6 +1,8 @@
 package com.dmitrybrant.modelviewer
 
 import android.opengl.Matrix
+import kotlin.math.max
+import kotlin.math.sqrt
 
 /*
 * Copyright 2017 Dmitry Brant. All rights reserved.
@@ -26,6 +28,10 @@ abstract class Model {
 
     var floorOffset = 0f
         protected set
+
+    /** Radius of a sphere around the center of mass that contains the whole model, once it's scaled to its bounds. */
+    var boundingRadius = 0f
+        private set
 
     var title = ""
 
@@ -59,6 +65,11 @@ abstract class Model {
         Matrix.rotateM(modelMatrix, 0, rotateZ, 0.0f, 0.0f, 1.0f)
         scaleModelMatrixToBounds(boundSize)
         Matrix.translateM(modelMatrix, 0, -centerMassX, -centerMassY, -centerMassZ)
+        val scale = getBoundScale(boundSize).takeIf { it != 0f } ?: 1f
+        val dx = max(maxX - centerMassX, centerMassX - minX)
+        val dy = max(maxY - centerMassY, centerMassY - minY)
+        val dz = max(maxZ - centerMassZ, centerMassZ - minZ)
+        boundingRadius = sqrt(dx * dx + dy * dy + dz * dz) / scale
     }
 
     abstract fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray, light: Light)

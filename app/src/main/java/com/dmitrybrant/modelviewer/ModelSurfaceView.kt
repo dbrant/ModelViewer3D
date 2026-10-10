@@ -99,6 +99,7 @@ class ModelSurfaceView(context: Context, model: Model?) : GLSurfaceView(context)
 
     init {
         setEGLContextClientVersion(3)
+        setEGLConfigChooser(EglConfigChooser())
         renderer = ModelRenderer(model)
         setRenderer(renderer)
         renderMode = RENDERMODE_WHEN_DIRTY

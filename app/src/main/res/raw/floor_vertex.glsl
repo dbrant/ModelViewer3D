@@ -1,4 +1,6 @@
-precision mediump float;
+// Positions are transformed with full precision, since on some GPUs, mediump floats have only
+// 16 bits, which isn't enough for them.
+precision highp float;
 
 uniform mat4 u_Model;
 uniform mat4 u_MVP;
