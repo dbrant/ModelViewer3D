@@ -10,7 +10,7 @@ junit = "4.13.2"
 kotlin = "2.4.21"
 material = "1.14.0"
 okhttp = "5.5.1"
-protobufGradlePlugin = "0.10.0"
+protobufGradlePlugin = "0.10.1"
 
 [libraries]
 androidx-activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "activityKtx" }
