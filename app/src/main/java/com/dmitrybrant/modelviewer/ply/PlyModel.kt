@@ -449,10 +449,10 @@ class PlyModel(inputStream: InputStream) : MeshModel() {
             }
             else if (vertexElement[i].second == "y" && yOffset < 0) { yOffset = elementByteLength }
             else if (vertexElement[i].second == "z" && zOffset < 0) { zOffset = elementByteLength }
-            else if (vertexElement[i].second == "red" && rOffset < 0) { rOffset = elementByteLength }
-            else if (vertexElement[i].second == "green" && gOffset < 0) { gOffset = elementByteLength }
-            else if (vertexElement[i].second == "blue" && bOffset < 0) { bOffset = elementByteLength }
-            else if (vertexElement[i].second == "alpha" && alphaOffset < 0) { alphaOffset = elementByteLength }
+            else if (vertexElement[i].second in redNames && rOffset < 0) { rOffset = elementByteLength }
+            else if (vertexElement[i].second in greenNames && gOffset < 0) { gOffset = elementByteLength }
+            else if (vertexElement[i].second in blueNames && bOffset < 0) { bOffset = elementByteLength }
+            else if (vertexElement[i].second in alphaNames && alphaOffset < 0) { alphaOffset = elementByteLength }
             elementByteLength += length
         }
 
@@ -537,10 +537,10 @@ class PlyModel(inputStream: InputStream) : MeshModel() {
             if (vertexElement[i].second == "x" && xIndex < 0) { xIndex = i }
             else if (vertexElement[i].second == "y" && yIndex < 0) { yIndex = i }
             else if (vertexElement[i].second == "z" && zIndex < 0) { zIndex = i }
-            else if (vertexElement[i].second == "red" && rIndex < 0) { rIndex = i }
-            else if (vertexElement[i].second == "green" && gIndex < 0) { gIndex = i }
-            else if (vertexElement[i].second == "blue" && bIndex < 0) { bIndex = i }
-            else if (vertexElement[i].second == "alpha" && alphaIndex < 0) { alphaIndex = i }
+            else if (vertexElement[i].second in redNames && rIndex < 0) { rIndex = i }
+            else if (vertexElement[i].second in greenNames && gIndex < 0) { gIndex = i }
+            else if (vertexElement[i].second in blueNames && bIndex < 0) { bIndex = i }
+            else if (vertexElement[i].second in alphaNames && alphaIndex < 0) { alphaIndex = i }
         }
 
         if (rIndex >= 0 && gIndex >= 0 && bIndex >= 0) {
@@ -639,6 +639,12 @@ class PlyModel(inputStream: InputStream) : MeshModel() {
 
     companion object {
         private val spaceRegex = "\\s+".toRegex()
+
+        // Vertex color properties may be named either "red" or "diffuse_red", etc.
+        private val redNames = setOf("red", "diffuse_red")
+        private val greenNames = setOf("green", "diffuse_green")
+        private val blueNames = setOf("blue", "diffuse_blue")
+        private val alphaNames = setOf("alpha", "diffuse_alpha")
 
         // This is a method that takes a string and parses any integers out of it (in place, without
         // using any additional string splitting, regexes, or int parsing), which provides a pretty
