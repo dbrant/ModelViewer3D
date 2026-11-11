@@ -116,8 +116,9 @@ open class MeshModel : Model() {
     }
 
     private fun uploadTexture(material: Material, data: ByteArray) {
-        val maxSize = IntArray(1)
-        GLES20.glGetIntegerv(GLES20.GL_MAX_TEXTURE_SIZE, maxSize, 0)
+        val glMaxSize = IntArray(1)
+        GLES20.glGetIntegerv(GLES20.GL_MAX_TEXTURE_SIZE, glMaxSize, 0)
+        val maxSize = glMaxSize[0].coerceAtMost(MAX_TEXTURE_SIZE)
         val options = BitmapFactory.Options()
         options.inJustDecodeBounds = true
         BitmapFactory.decodeByteArray(data, 0, data.size, options)
@@ -125,9 +126,11 @@ open class MeshModel : Model() {
             Log.w(TAG, "Unable to decode texture: ${material.diffuseTextureName}")
             return
         }
-        // Reduce textures that are too large for the GPU.
+        // Reduce textures that are too large for the GPU or the size cap, by powers of two.
+        // Scaling to an exact size isn't possible here, since Canvas-based scaling (e.g.
+        // createScaledBitmap) can't handle non-premultiplied bitmaps with alpha.
         var sampleSize = 1
-        while (options.outWidth / sampleSize > maxSize[0] || options.outHeight / sampleSize > maxSize[0]) {
+        while (options.outWidth / sampleSize > maxSize || options.outHeight / sampleSize > maxSize) {
             sampleSize *= 2
         }
         options.inJustDecodeBounds = false
@@ -140,8 +143,8 @@ open class MeshModel : Model() {
         // Without an extension, OpenGL ES 2.0 can only repeat and mipmap textures whose sizes are powers of two.
         val extensions = GLES20.glGetString(GLES20.GL_EXTENSIONS).orEmpty()
         if (!extensions.contains("GL_OES_texture_npot")) {
-            val width = nextPowerOfTwo(bitmap.width).coerceAtMost(maxSize[0])
-            val height = nextPowerOfTwo(bitmap.height).coerceAtMost(maxSize[0])
+            val width = nextPowerOfTwo(bitmap.width).coerceAtMost(maxSize)
+            val height = nextPowerOfTwo(bitmap.height).coerceAtMost(maxSize)
             if (width != bitmap.width || height != bitmap.height) {
                 val scaled = Bitmap.createScaledBitmap(bitmap, width, height, true)
                 bitmap.recycle()
@@ -309,6 +312,9 @@ open class MeshModel : Model() {
         const val COORDS_PER_VERTEX = 3
         const val VERTEX_STRIDE = COORDS_PER_VERTEX * BYTES_PER_FLOAT
         const val INPUT_BUFFER_SIZE = 0x10000
+
+        // Limits texture memory, even when the GPU supports larger textures.
+        private const val MAX_TEXTURE_SIZE = 4096
 
         private const val BUFFER_POSITION = 0
         private const val BUFFER_NORMAL = 1
