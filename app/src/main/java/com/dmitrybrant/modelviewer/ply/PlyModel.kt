@@ -5,6 +5,8 @@ import android.opengl.Matrix
 import com.dmitrybrant.modelviewer.MeshModel
 import com.dmitrybrant.modelviewer.Light
 import com.dmitrybrant.modelviewer.R
+import com.dmitrybrant.modelviewer.util.FloatList
+import com.dmitrybrant.modelviewer.util.IntList
 import com.dmitrybrant.modelviewer.util.Util
 import java.io.*
 import java.nio.ByteBuffer
@@ -13,7 +15,6 @@ import java.nio.ByteOrder
 /*
 *
 * Info on the PLY format: https://en.wikipedia.org/wiki/PLY_(file_format)
-* Please see limitations in inline comments.
 *
 * Copyright 2017- Dmitry Brant. All rights reserved.
 *
@@ -29,14 +30,21 @@ import java.nio.ByteOrder
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
+
+/**
+ * A model from a PLY (Stanford) file, in ASCII or binary (either byte order). A file with faces is
+ * shown as a mesh, and a file with only vertices is shown as a point cloud.
+ *
+ * Faces may be polygons with any number of sides. Vertex properties may be of any type, and normals
+ * in the file are used when present. Other properties and elements are skipped.
+ */
 class PlyModel(inputStream: InputStream) : MeshModel() {
     private val pointColor = floatArrayOf(1.0f, 1.0f, 1.0f, 1.0f)
     private var isPointCloud = false
-    private var hasVertexColors = false
 
     init {
         val stream = BufferedInputStream(inputStream, INPUT_BUFFER_SIZE)
-        readText(stream)
+        read(stream)
         if (vertexCount <= 0 || vertexBuffer == null) {
             throw IOException("Invalid model.")
         }
@@ -65,521 +73,547 @@ class PlyModel(inputStream: InputStream) : MeshModel() {
         floorOffset = (minY - centerMassY) / scale
     }
 
-    private fun readText(stream: BufferedInputStream) {
-        val elements = mutableMapOf<String, List<Pair<String, String>>>()
-        val elementCounts = mutableMapOf<String, Int>()
-        val indices = mutableListOf<Int>()
-        val normalBucket = mutableListOf<Float>()
-        val normalIndices = mutableListOf<Int>()
+    // Header
 
-        val vertices = mutableListOf<Float>()
-        val colors = mutableListOf<Float>()
-        val reader = BufferedReader(InputStreamReader(stream), INPUT_BUFFER_SIZE)
-        var line: String
-        var lineArr: List<String>
+    private enum class ScalarType(val size: Int, val colorScale: Float) {
+        INT8(1, 1f / 255f), UINT8(1, 1f / 255f),
+        INT16(2, 1f / 65535f), UINT16(2, 1f / 65535f),
+        // Colors with larger integer types are rare, and are usually in the range of 0 to 255.
+        INT32(4, 1f / 255f), UINT32(4, 1f / 255f),
+        INT64(8, 1f / 255f), UINT64(8, 1f / 255f),
+        // Floating-point colors are in the range of 0 to 1.
+        FLOAT32(4, 1f), FLOAT64(8, 1f);
 
-        stream.mark(0x100000)
+        companion object {
+            fun of(name: String) = when (name) {
+                "char", "int8" -> INT8
+                "uchar", "uint8" -> UINT8
+                "short", "int16" -> INT16
+                "ushort", "uint16" -> UINT16
+                "int", "int32" -> INT32
+                "uint", "uint32" -> UINT32
+                "long", "int64" -> INT64
+                "ulong", "uint64" -> UINT64
+                "float", "float32" -> FLOAT32
+                "double", "float64" -> FLOAT64
+                else -> null
+            }
+        }
+    }
+
+    /** A property of an element. For a list property, [countType] is the type of its count, and [type] is the type of its items. */
+    private class Property(val name: String, val type: ScalarType, val countType: ScalarType?) {
+        val isList get() = countType != null
+        val isFaceIndexList get() = isList && (name == "vertex_indices" || name == "vertex_index")
+    }
+
+    private class Element(val name: String, val count: Int) {
+        val properties = mutableListOf<Property>()
+
+        fun indexOf(names: Set<String>) = properties.indexOfFirst { it.name in names && !it.isList }
+    }
+
+    private class Header(val isBinary: Boolean, val isBigEndian: Boolean, val elements: List<Element>)
+
+    /** Reads the header, a line at a time, which leaves the stream at the start of the data. */
+    private fun readHeader(stream: InputStream): Header {
+        val elements = mutableListOf<Element>()
         var isBinary = false
         var isBigEndian = false
+        var sawMagic = false
+        var headerSize = 0
+        val lineBytes = ByteArrayOutputStream()
 
-        var currentElement: MutableList<Pair<String, String>>? = null
-
-        while (reader.readLine().also { line = it.orEmpty() } != null) {
-            line = line.trim()
-            if (line.isEmpty())
-                continue
-
-            lineArr = line.split(spaceRegex)
-            if (lineArr.isEmpty()) {
+        while (true) {
+            lineBytes.reset()
+            while (true) {
+                val b = stream.read()
+                if (b < 0 || ++headerSize > MAX_HEADER_SIZE) {
+                    throw IOException("Invalid PLY header.")
+                }
+                if (b == '\n'.code) {
+                    break
+                }
+                lineBytes.write(b)
+            }
+            val line = lineBytes.toString("ISO-8859-1").trim()
+            if (line.isEmpty()) {
                 continue
             }
-            if (lineArr[0] == "format") {
-                if (line.contains("binary")) {
-                    isBinary = true
-                    isBigEndian = line.contains("big")
+            val tokens = line.split(spaceRegex)
+            if (!sawMagic) {
+                if (tokens[0] != "ply") {
+                    throw IOException("Not a PLY file.")
                 }
-            } else if (lineArr[0] == "element") {
-                val elementName = lineArr[1]
-                currentElement = mutableListOf()
-                elements[elementName] = currentElement
-                elementCounts[elementName] = lineArr[2].toInt()
-            } else if (lineArr[0] == "property") {
-                val propType = lineArr.subList(1, (lineArr.size - 1)).joinToString(" ")
-                val propName = lineArr[lineArr.size - 1]
-                currentElement?.add(Pair(propType, propName))
-            } else if (lineArr[0] == "end_header") {
-                break
+                sawMagic = true
+                continue
+            }
+            when (tokens[0]) {
+                "format" -> {
+                    val format = tokens.getOrElse(1) { "" }
+                    if (format.contains("binary")) {
+                        isBinary = true
+                        isBigEndian = format.contains("big")
+                    }
+                }
+                "element" -> {
+                    val count = tokens.getOrNull(2)?.toIntOrNull()
+                    if (count == null || count < 0) {
+                        throw IOException("Invalid element in PLY header.")
+                    }
+                    elements.add(Element(tokens[1], count))
+                }
+                "property" -> {
+                    val element = elements.lastOrNull() ?: continue
+                    val property = if (tokens.size >= 5 && tokens[1] == "list") {
+                        val countType = ScalarType.of(tokens[2])
+                        val itemType = ScalarType.of(tokens[3])
+                        if (countType == null || itemType == null) {
+                            throw IOException("Unsupported property type in PLY header: ${tokens[2]} ${tokens[3]}")
+                        }
+                        Property(tokens.last(), itemType, countType)
+                    } else {
+                        val type = (if (tokens.size >= 3) ScalarType.of(tokens[1]) else null)
+                            ?: throw IOException("Unsupported property type in PLY header: ${tokens.drop(1).joinToString(" ")}")
+                        Property(tokens.last(), type, null)
+                    }
+                    element.properties.add(property)
+                }
+                "end_header" -> return Header(isBinary, isBigEndian, elements)
+                // "comment", "obj_info", etc.
+                else -> {}
+            }
+        }
+    }
+
+    // Reading
+
+    /** Where the properties of interest are, among the properties of the vertex element. */
+    private class VertexLayout(element: Element) {
+        val x = element.indexOf(setOf("x"))
+        val y = element.indexOf(setOf("y"))
+        val z = element.indexOf(setOf("z"))
+        val nx = element.indexOf(setOf("nx"))
+        val ny = element.indexOf(setOf("ny"))
+        val nz = element.indexOf(setOf("nz"))
+        val r = element.indexOf(redNames)
+        val g = element.indexOf(greenNames)
+        val b = element.indexOf(blueNames)
+        val a = element.indexOf(alphaNames)
+        val rScale = element.properties.getOrNull(r)?.type?.colorScale ?: 1f
+        val gScale = element.properties.getOrNull(g)?.type?.colorScale ?: 1f
+        val bScale = element.properties.getOrNull(b)?.type?.colorScale ?: 1f
+        val aScale = element.properties.getOrNull(a)?.type?.colorScale ?: 1f
+
+        val hasColors = r >= 0 && g >= 0 && b >= 0
+        val hasNormals = nx >= 0 && ny >= 0 && nz >= 0
+    }
+
+    /** The data that's read from the file. */
+    private class Contents(vertexCount: Int, layout: VertexLayout) {
+        val vertices = FloatList(initialCapacity(vertexCount, 3))
+        val normals = FloatList(if (layout.hasNormals) initialCapacity(vertexCount, 3) else 16)
+        val colors = FloatList(initialCapacity(vertexCount, 4))
+        val indices = IntList()
+        var hasFaces = false
+        /** Corners of the current polygon. */
+        var corners = IntArray(64)
+            private set
+
+        /** Adds the properties of interest of a vertex, given the values of all its properties. */
+        fun addVertex(layout: VertexLayout, values: FloatArray, pointColor: FloatArray) {
+            vertices.add(values[layout.x])
+            vertices.add(values[layout.y])
+            vertices.add(values[layout.z])
+            if (layout.hasNormals) {
+                normals.add(values[layout.nx])
+                normals.add(values[layout.ny])
+                normals.add(values[layout.nz])
+            }
+            if (layout.hasColors) {
+                colors.add(values[layout.r] * layout.rScale)
+                colors.add(values[layout.g] * layout.gScale)
+                colors.add(values[layout.b] * layout.bScale)
+                colors.add(if (layout.a >= 0) values[layout.a] * layout.aScale else 1f)
+            } else {
+                for (c in pointColor) {
+                    colors.add(c)
+                }
             }
         }
 
-        vertexCount = elementCounts["vertex"] ?: 0
-        if (vertexCount <= 0) {
+        fun ensureCorners(count: Int) {
+            if (count > corners.size) {
+                corners = IntArray(count)
+            }
+        }
+
+        /** Adds the triangles of a polygon (as a fan), given the indices of its corners. */
+        fun addPolygon(count: Int) {
+            for (k in 1 until count - 1) {
+                indices.add(corners[0])
+                indices.add(corners[k])
+                indices.add(corners[k + 1])
+            }
+        }
+
+        companion object {
+            /** Initial capacity of an array, which isn't too large, since the counts in the header can't be trusted. */
+            private fun initialCapacity(count: Int, itemsPerVertex: Int) =
+                (count.toLong() * itemsPerVertex).coerceIn(16L, MAX_INITIAL_CAPACITY.toLong()).toInt()
+        }
+    }
+
+    private fun read(stream: BufferedInputStream) {
+        val header = readHeader(stream)
+        val vertexElement = header.elements.firstOrNull { it.name == "vertex" }
+        if (vertexElement == null || vertexElement.count <= 0) {
             throw IOException("No vertices found in model.")
         }
+        val layout = VertexLayout(vertexElement)
+        if (layout.x < 0 || layout.y < 0 || layout.z < 0) {
+            throw IOException("Vertices in model have no positions.")
+        }
 
-        if (isBinary) {
-            stream.reset()
-            readVerticesBinary(isBigEndian, vertices, colors, elements["vertex"]!!, stream)
+        val contents = Contents(vertexElement.count, layout)
+        if (header.isBinary) {
+            readBinary(stream, header, layout, contents)
         } else {
-            readVerticesText(vertices, colors, elements["vertex"]!!, reader)
+            readText(stream, header, layout, contents)
         }
 
-        val faceCount = elementCounts["face"] ?: 0
-        isPointCloud = faceCount == 0
-
-        if (faceCount > 0) {
-            if (isBinary) {
-                val faceVertexIndexType = (elements["face"]!!.firstOrNull { it.second == "vertex_index" } ?: elements["face"]!!.first { it.second == "vertex_indices" }).first
-                lineArr = faceVertexIndexType.split(" ")
-                val indexLength = typeToSize(lineArr[lineArr.size - 2])
-                val itemLength = typeToSize(lineArr[lineArr.size - 1])
-                readFacesBinary(isBigEndian, indexLength, itemLength, faceCount, indices, vertices,
-                    normalBucket, normalIndices, stream)
-            } else {
-                readFacesText(faceCount, indices, vertices, normalBucket, normalIndices, reader)
+        val vertices = contents.vertices.array
+        vertexCount = contents.vertices.size / 3
+        val indices = contents.indices
+        // Faces with indices out of range make the model invalid.
+        for (i in 0 until indices.size) {
+            if (indices[i] !in 0 until vertexCount) {
+                throw IOException("Invalid face in model.")
             }
         }
 
-        var vbb = ByteBuffer.allocateDirect(vertices.size * BYTES_PER_FLOAT)
-        vbb.order(ByteOrder.nativeOrder())
-        vertexBuffer = vbb.asFloatBuffer()
-        for (i in vertices.indices) {
-            vertexBuffer!!.put(vertices[i])
-        }
-        vertexBuffer!!.position(0)
-
-        if (faceCount > 0) {
-            indexCount = indices.size
-            vbb = ByteBuffer.allocateDirect(indexCount * BYTES_PER_INT)
-            vbb.order(ByteOrder.nativeOrder())
-            indexBuffer = vbb.asIntBuffer()
-            for (i in 0 until indexCount) {
-                indexBuffer!!.put(indices[i])
-            }
-            indexBuffer!!.position(0)
-
-            val normalArray = FloatArray(vertices.size)
-            var vi: Int
-            var ni: Int
-            for (i in 0 until indexCount) {
-                vi = indices[i]
-                ni = normalIndices[i]
-                normalArray[vi * 3] = normalBucket[ni * 3]
-                normalArray[vi * 3 + 1] = normalBucket[ni * 3 + 1]
-                normalArray[vi * 3 + 2] = normalBucket[ni * 3 + 2]
-            }
-            vbb = ByteBuffer.allocateDirect(normalArray.size * BYTES_PER_FLOAT)
-            vbb.order(ByteOrder.nativeOrder())
-            normalBuffer = vbb.asFloatBuffer()
-            normalBuffer!!.put(normalArray)
-            normalBuffer!!.position(0)
-        }
-
-        // Point clouds always need colors, but meshes only have them if the file does.
-        if (colors.isNotEmpty() && (isPointCloud || hasVertexColors)) {
-            vbb = ByteBuffer.allocateDirect(colors.size * BYTES_PER_FLOAT)
-            vbb.order(ByteOrder.nativeOrder())
-            colorBuffer = vbb.asFloatBuffer()
-            for (i in colors.indices) {
-                colorBuffer!!.put(colors[i])
-            }
-            colorBuffer!!.position(0)
-        }
-    }
-
-    private fun readFacesText(faceCount: Int, indices: MutableList<Int>, vertices: List<Float>,
-                              normalBucket: MutableList<Float>, normalIndices: MutableList<Int>,
-                              reader: BufferedReader) {
-        var line: String
-        var index1: Int
-        var index2: Int
-        var index3: Int
-        var index4: Int
-        val intArr = IntArray(8)
-        val customNormal = FloatArray(3)
-        var i = 0
-
-        while (i < faceCount) {
-            line = reader.readLine().trim()
-            if (line.isEmpty())
-                continue
-            i++
-
-            parseInts(line, intArr)
-
-            if (intArr[0] == 3) {
-                // triangle
-                index1 = intArr[1]
-                index2 = intArr[2]
-                index3 = intArr[3]
-                indices.add(index1)
-                indices.add(index2)
-                indices.add(index3)
-
-                Util.calculateNormal(
-                    vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
-                    vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2],
-                    vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
-                    customNormal
-                )
-                normalBucket.add(customNormal[0])
-                normalBucket.add(customNormal[1])
-                normalBucket.add(customNormal[2])
-                normalIndices.add((normalBucket.size - 1) / 3)
-                normalIndices.add((normalBucket.size - 1) / 3)
-                normalIndices.add((normalBucket.size - 1) / 3)
-            } else if (intArr[0] == 4) {
-                // quad
-                index1 = intArr[1]
-                index2 = intArr[2]
-                index3 = intArr[3]
-                index4 = intArr[4]
-                indices.add(index1)
-                indices.add(index2)
-                indices.add(index3)
-                indices.add(index1)
-                indices.add(index3)
-                indices.add(index4)
-
-                Util.calculateNormal(
-                    vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
-                    vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2],
-                    vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
-                    customNormal
-                )
-                normalBucket.add(customNormal[0])
-                normalBucket.add(customNormal[1])
-                normalBucket.add(customNormal[2])
-                normalIndices.add((normalBucket.size - 1) / 3)
-                normalIndices.add((normalBucket.size - 1) / 3)
-                normalIndices.add((normalBucket.size - 1) / 3)
-                Util.calculateNormal(
-                    vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
-                    vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
-                    vertices[index4 * 3], vertices[index4 * 3 + 1], vertices[index4 * 3 + 2],
-                    customNormal
-                )
-                normalBucket.add(customNormal[0])
-                normalBucket.add(customNormal[1])
-                normalBucket.add(customNormal[2])
-                normalIndices.add((normalBucket.size - 1) / 3)
-                normalIndices.add((normalBucket.size - 1) / 3)
-                normalIndices.add((normalBucket.size - 1) / 3)
-            } else {
-                // unsupported, so fall back to point cloud.
-                isPointCloud = true
-                return
-            }
-        }
-    }
-
-    // TODO: The binary format of faces is currently assumed to be "uchar int"
-    // Are there other types?
-    private fun readFacesBinary(bigEndian: Boolean, indexLen: Int, itemLen: Int,
-                                faceCount: Int, indices: MutableList<Int>,
-                                vertices: List<Float>, normalBucket: MutableList<Float>,
-                                normalIndices: MutableList<Int>, stream: BufferedInputStream) {
-        val tempBytes = ByteArray(0x1000)
-        var elementCount: Int
-        var index1: Int
-        var index2: Int
-        var index3: Int
-        var index4: Int
-        val customNormal = FloatArray(3)
-
-        for (i in 0 until faceCount) {
-            stream.read(tempBytes, 0, indexLen)
-            elementCount = if (indexLen == 1) {
-                tempBytes[0].toInt()
-            } else if (indexLen == 2) {
-                if (bigEndian) Util.readShortBe(tempBytes, 0) else Util.readShortLe(tempBytes, 0)
-            } else {
-                if (bigEndian) Util.readIntBe(tempBytes, 0) else Util.readIntLe(tempBytes, 0)
-            }
-            stream.read(tempBytes, 0, elementCount * itemLen)
-            if (elementCount == 3) {
-                // triangle
-                if (itemLen == 1) {
-                    index1 = tempBytes[0].toInt()
-                    index2 = tempBytes[1].toInt()
-                    index3 = tempBytes[2].toInt()
-                } else if (itemLen == 2) {
-                    if (bigEndian) {
-                        index1 = Util.readShortBe(tempBytes, 0)
-                        index2 = Util.readShortBe(tempBytes, 2)
-                        index3 = Util.readShortBe(tempBytes, 4)
-                    } else {
-                        index1 = Util.readShortLe(tempBytes, 0)
-                        index2 = Util.readShortLe(tempBytes, 2)
-                        index3 = Util.readShortLe(tempBytes, 4)
-                    }
-                } else {
-                    if (bigEndian) {
-                        index1 = Util.readIntBe(tempBytes, 0)
-                        index2 = Util.readIntBe(tempBytes, 4)
-                        index3 = Util.readIntBe(tempBytes, 8)
-                    } else {
-                        index1 = Util.readIntLe(tempBytes, 0)
-                        index2 = Util.readIntLe(tempBytes, 4)
-                        index3 = Util.readIntLe(tempBytes, 8)
-                    }
-                }
-                indices.add(index1)
-                indices.add(index2)
-                indices.add(index3)
-
-                Util.calculateNormal(
-                    vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
-                    vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2],
-                    vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
-                    customNormal
-                )
-                normalBucket.add(customNormal[0])
-                normalBucket.add(customNormal[1])
-                normalBucket.add(customNormal[2])
-                normalIndices.add((normalBucket.size - 1) / 3)
-                normalIndices.add((normalBucket.size - 1) / 3)
-                normalIndices.add((normalBucket.size - 1) / 3)
-            } else if (elementCount == 4) {
-                if (itemLen == 1) {
-                    index1 = tempBytes[0].toInt()
-                    index2 = tempBytes[1].toInt()
-                    index3 = tempBytes[2].toInt()
-                    index4 = tempBytes[3].toInt()
-                } else if (itemLen == 2) {
-                    if (bigEndian) {
-                        index1 = Util.readShortBe(tempBytes, 0)
-                        index2 = Util.readShortBe(tempBytes, 2)
-                        index3 = Util.readShortBe(tempBytes, 4)
-                        index4 = Util.readShortBe(tempBytes, 6)
-                    } else {
-                        index1 = Util.readShortLe(tempBytes, 0)
-                        index2 = Util.readShortLe(tempBytes, 2)
-                        index3 = Util.readShortLe(tempBytes, 4)
-                        index4 = Util.readShortLe(tempBytes, 6)
-                    }
-                } else {
-                    if (bigEndian) {
-                        index1 = Util.readIntBe(tempBytes, 0)
-                        index2 = Util.readIntBe(tempBytes, 4)
-                        index3 = Util.readIntBe(tempBytes, 8)
-                        index4 = Util.readIntBe(tempBytes, 12)
-                    } else {
-                        index1 = Util.readIntLe(tempBytes, 0)
-                        index2 = Util.readIntLe(tempBytes, 4)
-                        index3 = Util.readIntLe(tempBytes, 8)
-                        index4 = Util.readIntLe(tempBytes, 12)
-                    }
-                }
-                indices.add(index1)
-                indices.add(index2)
-                indices.add(index3)
-                indices.add(index1)
-                indices.add(index3)
-                indices.add(index4)
-
-                Util.calculateNormal(
-                    vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
-                    vertices[index2 * 3], vertices[index2 * 3 + 1], vertices[index2 * 3 + 2],
-                    vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
-                    customNormal
-                )
-                normalBucket.add(customNormal[0])
-                normalBucket.add(customNormal[1])
-                normalBucket.add(customNormal[2])
-                normalIndices.add((normalBucket.size - 1) / 3)
-                normalIndices.add((normalBucket.size - 1) / 3)
-                normalIndices.add((normalBucket.size - 1) / 3)
-                Util.calculateNormal(
-                    vertices[index1 * 3], vertices[index1 * 3 + 1], vertices[index1 * 3 + 2],
-                    vertices[index3 * 3], vertices[index3 * 3 + 1], vertices[index3 * 3 + 2],
-                    vertices[index4 * 3], vertices[index4 * 3 + 1], vertices[index4 * 3 + 2],
-                    customNormal
-                )
-                normalBucket.add(customNormal[0])
-                normalBucket.add(customNormal[1])
-                normalBucket.add(customNormal[2])
-                normalIndices.add((normalBucket.size - 1) / 3)
-                normalIndices.add((normalBucket.size - 1) / 3)
-                normalIndices.add((normalBucket.size - 1) / 3)
-            } else {
-                // unsupported, so fall back to point cloud.
-                isPointCloud = true
-                return
-            }
-        }
-    }
-
-    private fun readVerticesBinary(bigEndian: Boolean, vertices: MutableList<Float>, colors: MutableList<Float>,
-                                   vertexElement: List<Pair<String, String>>, stream: BufferedInputStream) {
-        val tempBytes = ByteArray(0x1000)
-        stream.mark(1)
-        stream.read(tempBytes)
-        val tempStr = String(tempBytes)
-        val contentsPos = tempStr.indexOf("end_header") + 11
-        stream.reset()
-        stream.skip(contentsPos.toLong())
-
-        var x: Float
-        var y: Float
-        var z: Float
         var centerMassX = 0.0
         var centerMassY = 0.0
         var centerMassZ = 0.0
-
-        var elementByteLength = 0
-
-        var xOffset = -1
-        var yOffset = -1
-        var zOffset = -1
-        var rOffset = -1
-        var gOffset = -1
-        var bOffset = -1
-        var alphaOffset = -1
-
-        // TODO: This just assumes that all three components x,y,z are the same type (float or double)
-        // Can there be cases when each component is a different type?
-        var areVerticesDouble = false
-
-        for (i in vertexElement.indices) {
-            val length = typeToSize(vertexElement[i].first)
-            if (vertexElement[i].second == "x" && xOffset < 0) {
-                xOffset = elementByteLength
-                if (vertexElement[i].first == "double") { areVerticesDouble = true }
-            }
-            else if (vertexElement[i].second == "y" && yOffset < 0) { yOffset = elementByteLength }
-            else if (vertexElement[i].second == "z" && zOffset < 0) { zOffset = elementByteLength }
-            else if (vertexElement[i].second in redNames && rOffset < 0) { rOffset = elementByteLength }
-            else if (vertexElement[i].second in greenNames && gOffset < 0) { gOffset = elementByteLength }
-            else if (vertexElement[i].second in blueNames && bOffset < 0) { bOffset = elementByteLength }
-            else if (vertexElement[i].second in alphaNames && alphaOffset < 0) { alphaOffset = elementByteLength }
-            elementByteLength += length
-        }
-
-        if (rOffset >= 0 && gOffset >= 0 && bOffset >= 0) {
-            hasVertexColors = true
-        }
-
         for (i in 0 until vertexCount) {
-            stream.read(tempBytes, 0, elementByteLength)
-
-            if (bigEndian) {
-                if (areVerticesDouble) {
-                    x = java.lang.Double.longBitsToDouble(Util.readLongBe(tempBytes, xOffset)).toFloat()
-                    y = java.lang.Double.longBitsToDouble(Util.readLongBe(tempBytes, yOffset)).toFloat()
-                    z = java.lang.Double.longBitsToDouble(Util.readLongBe(tempBytes, zOffset)).toFloat()
-                } else {
-                    x = java.lang.Float.intBitsToFloat(Util.readIntBe(tempBytes, xOffset))
-                    y = java.lang.Float.intBitsToFloat(Util.readIntBe(tempBytes, yOffset))
-                    z = java.lang.Float.intBitsToFloat(Util.readIntBe(tempBytes, zOffset))
-                }
-            } else {
-                if (areVerticesDouble) {
-                    x = java.lang.Double.longBitsToDouble(Util.readLongLe(tempBytes, xOffset)).toFloat()
-                    y = java.lang.Double.longBitsToDouble(Util.readLongLe(tempBytes, yOffset)).toFloat()
-                    z = java.lang.Double.longBitsToDouble(Util.readLongLe(tempBytes, zOffset)).toFloat()
-                } else {
-                    x = java.lang.Float.intBitsToFloat(Util.readIntLe(tempBytes, xOffset))
-                    y = java.lang.Float.intBitsToFloat(Util.readIntLe(tempBytes, yOffset))
-                    z = java.lang.Float.intBitsToFloat(Util.readIntLe(tempBytes, zOffset))
-                }
-            }
-
-            vertices.add(x)
-            vertices.add(y)
-            vertices.add(z)
+            val x = vertices[i * 3]
+            val y = vertices[i * 3 + 1]
+            val z = vertices[i * 3 + 2]
             adjustMaxMin(x, y, z)
-            centerMassX += x.toDouble()
-            centerMassY += y.toDouble()
-            centerMassZ += z.toDouble()
-
-            if (hasVertexColors) {
-                colors.add((tempBytes[rOffset].toInt() and 0xff).toFloat() / 255f)
-                colors.add((tempBytes[gOffset].toInt() and 0xff).toFloat() / 255f)
-                colors.add((tempBytes[bOffset].toInt() and 0xff).toFloat() / 255f)
-                if (alphaOffset >= 0) {
-                    colors.add((tempBytes[alphaOffset].toInt()and 0xff).toFloat() / 255f)
-                } else {
-                    colors.add(1f)
-                }
-            } else {
-                colors.add(pointColor[0])
-                colors.add(pointColor[1])
-                colors.add(pointColor[2])
-                colors.add(pointColor[3])
-            }
+            centerMassX += x
+            centerMassY += y
+            centerMassZ += z
         }
         this.centerMassX = (centerMassX / vertexCount).toFloat()
         this.centerMassY = (centerMassY / vertexCount).toFloat()
         this.centerMassZ = (centerMassZ / vertexCount).toFloat()
+
+        vertexBuffer = allocateFloats(vertices, contents.vertices.size)
+        isPointCloud = indices.size == 0
+        if (!isPointCloud) {
+            indexCount = indices.size
+            indexBuffer = allocateInts(indices.array, indices.size)
+            normalBuffer = if (layout.hasNormals) {
+                allocateFloats(contents.normals.array, contents.normals.size)
+            } else {
+                allocateFloats(faceNormals(vertices, vertexCount, indices))
+            }
+        }
+        // Point clouds always need colors, but meshes only have them if the file does.
+        if (isPointCloud || layout.hasColors) {
+            colorBuffer = allocateFloats(contents.colors.array, contents.colors.size)
+        }
     }
 
-    private fun readVerticesText(vertices: MutableList<Float>, colors: MutableList<Float>,
-                                 vertexElement: List<Pair<String, String>>, reader: BufferedReader) {
-        var line: String
-        var lineArr: List<String>
-        var x: Float
-        var y: Float
-        var z: Float
-        var centerMassX = 0.0
-        var centerMassY = 0.0
-        var centerMassZ = 0.0
-
-        var xIndex = -1
-        var yIndex = -1
-        var zIndex = -1
-        var rIndex = -1
-        var gIndex = -1
-        var bIndex = -1
-        var alphaIndex = -1
-
-        for (i in vertexElement.indices) {
-            if (vertexElement[i].second == "x" && xIndex < 0) { xIndex = i }
-            else if (vertexElement[i].second == "y" && yIndex < 0) { yIndex = i }
-            else if (vertexElement[i].second == "z" && zIndex < 0) { zIndex = i }
-            else if (vertexElement[i].second in redNames && rIndex < 0) { rIndex = i }
-            else if (vertexElement[i].second in greenNames && gIndex < 0) { gIndex = i }
-            else if (vertexElement[i].second in blueNames && bIndex < 0) { bIndex = i }
-            else if (vertexElement[i].second in alphaNames && alphaIndex < 0) { alphaIndex = i }
-        }
-
-        if (rIndex >= 0 && gIndex >= 0 && bIndex >= 0) {
-            hasVertexColors = true
-        }
-
+    /** Normals for each vertex, which are those of the last face (or triangle of a polygon) that uses the vertex. */
+    private fun faceNormals(vertices: FloatArray, vertexCount: Int, indices: IntList): FloatArray {
+        val normals = FloatArray(vertexCount * 3)
+        val normal = FloatArray(3)
         var i = 0
-        while (i < vertexCount) {
-            line = reader.readLine().trim()
-            if (line.isEmpty())
-                continue
-            i++
+        while (i + 2 < indices.size) {
+            val a = indices[i] * 3
+            val b = indices[i + 1] * 3
+            val c = indices[i + 2] * 3
+            Util.calculateNormal(vertices[a], vertices[a + 1], vertices[a + 2],
+                vertices[b], vertices[b + 1], vertices[b + 2],
+                vertices[c], vertices[c + 1], vertices[c + 2], normal)
+            for (k in intArrayOf(a, b, c)) {
+                normals[k] = normal[0]
+                normals[k + 1] = normal[1]
+                normals[k + 2] = normal[2]
+            }
+            i += 3
+        }
+        return normals
+    }
 
-            lineArr = line.split(spaceRegex)
-            x = lineArr[xIndex].toFloat()
-            y = lineArr[yIndex].toFloat()
-            z = lineArr[zIndex].toFloat()
-            vertices.add(x)
-            vertices.add(y)
-            vertices.add(z)
-            adjustMaxMin(x, y, z)
-            centerMassX += x.toDouble()
-            centerMassY += y.toDouble()
-            centerMassZ += z.toDouble()
-            if (hasVertexColors) {
-                colors.add(lineArr[rIndex].toFloat() / 255f)
-                colors.add(lineArr[gIndex].toFloat() / 255f)
-                colors.add(lineArr[bIndex].toFloat() / 255f)
-                colors.add(if (alphaIndex >= 0) lineArr[alphaIndex].toFloat() / 255f else 1f)
-            } else {
-                colors.add(pointColor[0])
-                colors.add(pointColor[1])
-                colors.add(pointColor[2])
-                colors.add(pointColor[3])
+    // ASCII
+
+    private fun readText(stream: InputStream, header: Header, layout: VertexLayout, contents: Contents) {
+        val reader = BufferedReader(InputStreamReader(stream, Charsets.ISO_8859_1), INPUT_BUFFER_SIZE)
+        val tokens = LineTokens()
+
+        for (element in header.elements) {
+            if (contents.hasFaces && element.name != "vertex" && element.name != "face") {
+                // Nothing else is needed.
+                break
+            }
+            val isVertex = element.name == "vertex"
+            val isFace = element.name == "face"
+            val values = FloatArray(element.properties.size)
+            var row = 0
+            while (row < element.count) {
+                val line = reader.readLine() ?: throw EOFException("Unexpected end of file.")
+                tokens.split(line)
+                if (tokens.count == 0) {
+                    continue
+                }
+                row++
+                if (isVertex) {
+                    // Lists in vertices aren't expected, so tokens correspond to properties.
+                    if (tokens.count < values.size) {
+                        throw IOException("Invalid vertex in model.")
+                    }
+                    for (i in values.indices) {
+                        values[i] = tokens.float(i)
+                    }
+                    contents.addVertex(layout, values, pointColor)
+                } else if (isFace) {
+                    contents.hasFaces = true
+                    var t = 0
+                    for (property in element.properties) {
+                        if (property.isList) {
+                            val n = if (t < tokens.count) tokens.int(t) else -1
+                            if (n < 0 || t + n >= tokens.count) {
+                                throw IOException("Invalid face in model.")
+                            }
+                            t++
+                            if (property.isFaceIndexList) {
+                                contents.ensureCorners(n)
+                                for (k in 0 until n) {
+                                    contents.corners[k] = tokens.int(t + k)
+                                }
+                                contents.addPolygon(n)
+                            }
+                            t += n
+                        } else {
+                            t++
+                        }
+                    }
+                }
             }
         }
-        this.centerMassX = (centerMassX / vertexCount).toFloat()
-        this.centerMassY = (centerMassY / vertexCount).toFloat()
-        this.centerMassZ = (centerMassZ / vertexCount).toFloat()
+    }
+
+    /** The positions of the whitespace-separated tokens in a line of text. */
+    private class LineTokens {
+        private var line = ""
+        private var starts = IntArray(32)
+        private var ends = IntArray(32)
+        var count = 0
+            private set
+
+        fun split(line: String) {
+            this.line = line
+            count = 0
+            var i = 0
+            val len = line.length
+            while (i < len) {
+                while (i < len && line[i] <= ' ') i++
+                if (i >= len) break
+                val start = i
+                while (i < len && line[i] > ' ') i++
+                if (count == starts.size) {
+                    starts = starts.copyOf(count * 2)
+                    ends = ends.copyOf(count * 2)
+                }
+                starts[count] = start
+                ends[count] = i
+                count++
+            }
+        }
+
+        fun float(index: Int): Float {
+            return line.substring(starts[index], ends[index]).toFloatOrNull()
+                ?: throw IOException("Invalid vertex in model.")
+        }
+
+        /** Parses a non-negative integer (a list count or index), without making a substring. */
+        fun int(index: Int): Int {
+            var value = 0L
+            for (i in starts[index] until ends[index]) {
+                val c = line[i]
+                if (c !in '0'..'9' || value > Int.MAX_VALUE) {
+                    throw IOException("Invalid face in model.")
+                }
+                value = value * 10 + (c - '0')
+            }
+            if (value > Int.MAX_VALUE) {
+                throw IOException("Invalid face in model.")
+            }
+            return value.toInt()
+        }
+    }
+
+    // Binary
+
+    /** Reads binary data from a stream, through a buffer that's refilled as needed. */
+    private class BinaryReader(private val stream: InputStream, bigEndian: Boolean) {
+        private val order = if (bigEndian) ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN
+        private var bytes = ByteArray(0x10000)
+        private var buffer = ByteBuffer.wrap(bytes).order(order)
+        /** Position of the next unread byte in the buffer. */
+        private var position = 0
+        /** End of the data in the buffer. */
+        private var limit = 0
+
+        /** Makes sure that at least [n] bytes are in the buffer, after the current position. */
+        fun require(n: Long) {
+            if (limit - position >= n) {
+                return
+            }
+            if (n > MAX_ROW_SIZE) {
+                throw IOException("Invalid model.")
+            }
+            val remaining = limit - position
+            if (n > bytes.size) {
+                val newBytes = ByteArray(maxOf(n.toInt(), bytes.size * 2))
+                System.arraycopy(bytes, position, newBytes, 0, remaining)
+                bytes = newBytes
+                buffer = ByteBuffer.wrap(bytes).order(order)
+            } else {
+                System.arraycopy(bytes, position, bytes, 0, remaining)
+            }
+            position = 0
+            limit = remaining
+            while (limit < n) {
+                val count = stream.read(bytes, limit, bytes.size - limit)
+                if (count < 0) {
+                    throw EOFException("Unexpected end of file.")
+                }
+                limit += count
+            }
+        }
+
+        /** Moves past [n] bytes, which must be in the buffer. */
+        fun advance(n: Int) {
+            position += n
+        }
+
+        /** Skips [n] bytes, which don't need to be in the buffer. */
+        fun skip(n: Long) {
+            var left = n
+            while (left > 0) {
+                if (position == limit) {
+                    require(1)
+                }
+                val chunk = minOf(left, (limit - position).toLong()).toInt()
+                position += chunk
+                left -= chunk
+            }
+        }
+
+        /** Reads a value of the given type, at the given offset from the current position. */
+        fun scalar(offset: Int, type: ScalarType): Double {
+            val p = position + offset
+            return when (type) {
+                ScalarType.INT8 -> bytes[p].toDouble()
+                ScalarType.UINT8 -> (bytes[p].toInt() and 0xff).toDouble()
+                ScalarType.INT16 -> buffer.getShort(p).toDouble()
+                ScalarType.UINT16 -> (buffer.getShort(p).toInt() and 0xffff).toDouble()
+                ScalarType.INT32 -> buffer.getInt(p).toDouble()
+                ScalarType.UINT32 -> (buffer.getInt(p).toLong() and 0xffffffffL).toDouble()
+                ScalarType.INT64 -> buffer.getLong(p).toDouble()
+                ScalarType.UINT64 -> buffer.getLong(p).toULong().toDouble()
+                ScalarType.FLOAT32 -> buffer.getFloat(p).toDouble()
+                ScalarType.FLOAT64 -> buffer.getDouble(p)
+            }
+        }
+
+        /** Reads an integer (a list count or index), which must be in the range of an Int. */
+        fun index(offset: Int, type: ScalarType): Int {
+            val value = scalar(offset, type)
+            if (value < 0 || value > Int.MAX_VALUE) {
+                throw IOException("Invalid face in model.")
+            }
+            return value.toInt()
+        }
+    }
+
+    private fun readBinary(stream: InputStream, header: Header, layout: VertexLayout, contents: Contents) {
+        val reader = BinaryReader(stream, header.isBigEndian)
+
+        for (element in header.elements) {
+            if (contents.hasFaces && element.name != "vertex" && element.name != "face") {
+                // Nothing else is needed.
+                break
+            }
+            val properties = element.properties
+            val isVertex = element.name == "vertex"
+            val isFace = element.name == "face"
+            val values = FloatArray(properties.size)
+
+            if (properties.none { it.isList }) {
+                // Fixed-size rows: find the offsets of the properties within each row.
+                val offsets = IntArray(properties.size)
+                var rowSize = 0
+                for (i in properties.indices) {
+                    offsets[i] = rowSize
+                    rowSize += properties[i].type.size
+                }
+                if (!isVertex) {
+                    // Skip other elements whole.
+                    reader.skip(rowSize.toLong() * element.count)
+                    continue
+                }
+                for (row in 0 until element.count) {
+                    reader.require(rowSize.toLong())
+                    for (i in properties.indices) {
+                        values[i] = reader.scalar(offsets[i], properties[i].type).toFloat()
+                    }
+                    contents.addVertex(layout, values, pointColor)
+                    reader.advance(rowSize)
+                }
+                continue
+            }
+
+            // Rows of varying size, which are read property by property.
+            if (isFace) {
+                contents.hasFaces = true
+            }
+            for (row in 0 until element.count) {
+                for (i in properties.indices) {
+                    val property = properties[i]
+                    val countType = property.countType
+                    if (countType != null) {
+                        reader.require(countType.size.toLong())
+                        val n = reader.index(0, countType)
+                        reader.advance(countType.size)
+                        val itemSize = property.type.size
+                        if (isFace && property.isFaceIndexList) {
+                            reader.require(n.toLong() * itemSize)
+                            contents.ensureCorners(n)
+                            for (k in 0 until n) {
+                                contents.corners[k] = reader.index(k * itemSize, property.type)
+                            }
+                            contents.addPolygon(n)
+                            reader.advance(n * itemSize)
+                        } else {
+                            reader.skip(n.toLong() * itemSize)
+                        }
+                    } else {
+                        reader.require(property.type.size.toLong())
+                        if (isVertex) {
+                            values[i] = reader.scalar(0, property.type).toFloat()
+                        }
+                        reader.advance(property.type.size)
+                    }
+                }
+                if (isVertex) {
+                    contents.addVertex(layout, values, pointColor)
+                }
+            }
+        }
     }
 
     override fun draw(viewMatrix: FloatArray, projectionMatrix: FloatArray, light: Light) {
@@ -612,66 +646,22 @@ class PlyModel(inputStream: InputStream) : MeshModel() {
         GLES20.glDisableVertexAttribArray(positionHandle)
     }
 
-    private fun typeToSize(typeStr: String): Int {
-        return when (typeStr) {
-            "char" -> 1
-            "uchar" -> 1
-            "int8" -> 1
-            "uint8" -> 1
-            "short" -> 2
-            "ushort" -> 2
-            "int16" -> 2
-            "uint16" -> 2
-            "int" -> 4
-            "int32" -> 4
-            "uint" -> 4
-            "uint32" -> 4
-            "int64" -> 8
-            "uint64" -> 8
-            "long" -> 8
-            "ulong" -> 8
-            "float" -> 4
-            "float32" -> 4
-            "double" -> 8
-            else -> 0
-        }
-    }
-
     companion object {
         private val spaceRegex = "\\s+".toRegex()
+
+        /** Largest header that's read. */
+        private const val MAX_HEADER_SIZE = 0x100000
+
+        /** Largest initial capacity of the arrays for the model, which grow from there to fit what's read. */
+        private const val MAX_INITIAL_CAPACITY = 1 shl 22
+
+        /** Largest row (or list) of binary data that's read into memory at once. */
+        private const val MAX_ROW_SIZE = 1L shl 28
 
         // Vertex color properties may be named either "red" or "diffuse_red", etc.
         private val redNames = setOf("red", "diffuse_red")
         private val greenNames = setOf("green", "diffuse_green")
         private val blueNames = setOf("blue", "diffuse_blue")
         private val alphaNames = setOf("alpha", "diffuse_alpha")
-
-        // This is a method that takes a string and parses any integers out of it (in place, without
-        // using any additional string splitting, regexes, or int parsing), which provides a pretty
-        // significant speed gain.
-        fun parseInts(str: String, ints: IntArray) {
-            val len = str.length
-            var intIndex = 0
-            var currentInt = -1
-            for (i in 0 until len) {
-                val c = str[i]
-                if (c in '0'..'9') {
-                    if (currentInt == -1) {
-                        currentInt = c - '0'
-                    } else {
-                        currentInt *= 10
-                        currentInt += c - '0'
-                    }
-                } else {
-                    if (currentInt >= 0) {
-                        ints[intIndex++] = currentInt
-                        currentInt = -1
-                    }
-                }
-            }
-            if (currentInt >= 0) {
-                ints[intIndex] = currentInt
-            }
-        }
     }
 }
